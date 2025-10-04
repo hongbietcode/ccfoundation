@@ -26,7 +26,12 @@ pub fn run() {
             list_config_files,
             check_app_config_exists,
             create_app_config_dir,
-            backup_claude_configs
+            backup_claude_configs,
+            get_stores,
+            create_store,
+            delete_store,
+            set_using_store,
+            get_current_store
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

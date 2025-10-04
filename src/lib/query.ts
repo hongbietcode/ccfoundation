@@ -16,6 +16,13 @@ export interface ConfigFile {
   exists: boolean;
 }
 
+export interface ConfigStore {
+  name: string;
+  created_at: number;
+  settings: unknown;
+  using: boolean;
+}
+
 export const useConfigFiles = () => {
   return useQuery({
     queryKey: ["config-files"],
@@ -48,5 +55,72 @@ export const useWriteConfigFile = () => {
 export const useBackupClaudeConfigs = () => {
   return useMutation({
     mutationFn: () => invoke<void>("backup_claude_configs"),
+  });
+};
+
+// Store management hooks
+
+export const useStores = () => {
+  return useQuery({
+    queryKey: ["stores"],
+    queryFn: () => invoke<ConfigStore[]>("get_stores"),
+  });
+};
+
+export const useCurrentStore = () => {
+  return useQuery({
+    queryKey: ["current-store"],
+    queryFn: () => invoke<ConfigStore | null>("get_current_store"),
+  });
+};
+
+export const useCreateStore = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ name, settings }: { name: string; settings: unknown }) =>
+      invoke<ConfigStore>("create_store", { name, settings }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stores"] });
+      queryClient.invalidateQueries({ queryKey: ["current-store"] });
+    },
+  });
+};
+
+export const useDeleteStore = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) => invoke<void>("delete_store", { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stores"] });
+      queryClient.invalidateQueries({ queryKey: ["current-store"] });
+    },
+  });
+};
+
+export const useSetUsingStore = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) => invoke<void>("set_using_store", { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stores"] });
+      queryClient.invalidateQueries({ queryKey: ["current-store"] });
+      queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+    },
+  });
+};
+
+export const useSetCurrentStore = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) => invoke<void>("set_using_store", { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stores"] });
+      queryClient.invalidateQueries({ queryKey: ["current-store"] });
+      queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+    },
   });
 };

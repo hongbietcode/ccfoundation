@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useConfigFile, useWriteConfigFile } from "./lib/query";
+import { useConfigFile, useWriteConfigFile } from "../lib/query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import "./App.css";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-function App() {
+export function ConfigEditorPage() {
   const [jsonContent, setJsonContent] = useState<string>("");
 
   const { data: configFile } = useConfigFile("user");
@@ -30,13 +30,22 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen p-4">
-      <div className="max-w-2xl mx-auto space-y-4">
-        <h1 className="text-xl font-semibold">
-          Configuration Manager
-        </h1>
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold">Configuration Editor</h1>
+        <p className="text-muted-foreground">
+          Edit your Claude Code configuration in JSON format
+        </p>
+      </div>
 
-        <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuration File</CardTitle>
+          <CardDescription>
+            Make changes to your current configuration
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           {configFile && (
             <div className="text-xs text-muted-foreground">
               {configFile.path}
@@ -81,10 +90,8 @@ function App() {
               </AlertDescription>
             </Alert>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-export default App;
