@@ -1,9 +1,7 @@
-import { useState, useEffect } from "react";
-import { ConfigType, useConfigFile, useStore, useStores, useWriteConfigFile } from "../lib/query";
-import { Button } from "@/components/ui/button";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { useStore } from "../lib/query";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useParams } from "react-router-dom";
 import { ChevronLeftIcon } from "lucide-react";
@@ -21,6 +19,39 @@ type SectionConfig = {
   sectionName: string;
   fields: FieldConfig[];
 };
+
+// Helper function to set nested object value from keypath
+function setNestedValue(obj: any, path: string, value: any) {
+  const keys = path.split('.');
+  const lastKey = keys.pop()!;
+  const target = keys.reduce((acc, key) => {
+    if (!acc[key]) acc[key] = {};
+    return acc[key];
+  }, obj);
+  target[lastKey] = value;
+}
+
+// Helper function to get nested object value from keypath
+function getNestedValue(obj: any, path: string) {
+  return path.split('.').reduce((acc, key) => acc?.[key], obj);
+}
+
+// Helper function to convert flat form data to nested JSON
+function convertToNestedJSON(formData: Record<string, any>) {
+  const { configName, ...settings } = formData;
+  const settingsJSON: any = {};
+  
+  Object.entries(settings).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      setNestedValue(settingsJSON, key, value);
+    }
+  });
+  
+  return {
+    configName,
+    "settings.json": settingsJSON
+  };
+}
 
 const fields: SectionConfig[] = [
   {
@@ -530,6 +561,30 @@ export function ConfigEditorPage() {
 
   const storeData = storeQuery.data;
 
+  // Prepare default values from store data
+  const defaultValues: Record<string, any> = { configName: storeData.name };
+  fields.forEach(section => {
+    section.fields.forEach(field => {
+      const value = getNestedValue(storeData.settings, field.name);
+      if (value !== undefined) {
+        defaultValues[field.name] = value;
+      } else if (field.defaultValue !== undefined) {
+        defaultValues[field.name] = field.defaultValue;
+      }
+    });
+  });
+
+  const { register, control, watch } = useForm({ defaultValues });
+
+  // Watch all form values and convert to nested JSON
+  const formValues = watch();
+  const combinedJSON = convertToNestedJSON(formValues);
+
+  // Log the combined JSON whenever it changes
+  useEffect(() => {
+    console.log('Combined JSON:', combinedJSON);
+  }, [formValues]);
+
   return (
     <div className="space-y-4">
       <nav className="px-2 pt-4">
@@ -541,8 +596,11 @@ export function ConfigEditorPage() {
 
       <section className="px-8">
         <h3 className="pb-2 font-medium mx-2 text-muted-foreground text-xs">配置名</h3>
-        <input id="configName" type="text" className="text-xs px-2 text-muted-foreground border rounded-sm w-[200px] h-7 bg-white" defaultValue={storeData.name} />
-
+        <input 
+          {...register("configName")} 
+          type="text" 
+          className="text-xs px-2 text-muted-foreground border rounded-sm w-[200px] h-7 bg-white" 
+        />
       </section>
       <section className="space-y-8 pb-8">
         {fields.map((field) => (
@@ -550,8 +608,8 @@ export function ConfigEditorPage() {
             <h3 className="px-10 py-2 font-medium  text-muted-foreground text-xs">{field.sectionName}</h3>
             <div className="mx-8 rounded-lg bg-zinc-50/50 p-3 space-y-5">
               {field.fields.map((field) => (
-                <div className="">
-                  <div key={field.name} className="flex gap-2 items-center justify-between">
+                <div className="" key={field.name}>
+                  <div className="flex gap-2 items-center justify-between">
                     <div className="space-y-1">
                       <div className="text-muted-foreground text-xs min-w-40 shrink-0">{field.label}</div>
                       {field.description && (
@@ -559,30 +617,63 @@ export function ConfigEditorPage() {
                       )}
                     </div>
                     {field.type === 'boolean' ? (
-                      <Select defaultValue={field.defaultValue !== undefined ? (field.defaultValue ? "true" : "false") : undefined}>
-                        <SelectTrigger className="w-1/2">
-                          <SelectValue placeholder="Default" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="true">true</SelectItem>
-                          <SelectItem value="false">false</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        name={field.name}
+                        control={control}
+                        render={({ field: { onChange, value } }) => (
+                          <Select 
+                            value={value !== undefined ? String(value) : undefined}
+                            onValueChange={(val) => onChange(val === "true")}
+                          >
+                            <SelectTrigger className="w-1/2">
+                              <SelectValue placeholder="Default" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="true">true</SelectItem>
+                              <SelectItem value="false">false</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     ) : field.type === 'select' ? (
-                      <Select>
-                        <SelectTrigger className="w-1/2">
-                          <SelectValue placeholder={field.placeholder || "Select..."} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        name={field.name}
+                        control={control}
+                        render={({ field: { onChange, value } }) => (
+                          <Select value={value} onValueChange={onChange}>
+                            <SelectTrigger className="w-1/2">
+                              <SelectValue placeholder={field.placeholder || "Select..."} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    ) : field.type === 'textarea' ? (
+                      <Textarea 
+                        {...register(field.name)} 
+                        className="w-1/2 text-xs" 
+                        placeholder={field.placeholder}
+                      />
+                    ) : field.type === 'number' ? (
+                      <input 
+                        {...register(field.name, { valueAsNumber: true })} 
+                        type="number" 
+                        className="text-xs px-2 text-muted-foreground border rounded-sm w-1/2 h-7 bg-white" 
+                        placeholder={field.placeholder}
+                      />
                     ) : (
-                      <input id={field.name} type={field.type} className="text-xs px-2 text-muted-foreground border rounded-sm w-1/2 h-7 bg-white" defaultValue={storeData.settings[field.name]} />
+                      <input 
+                        {...register(field.name)} 
+                        type="text" 
+                        className="text-xs px-2 text-muted-foreground border rounded-sm w-1/2 h-7 bg-white" 
+                        placeholder={field.placeholder}
+                      />
                     )}
                   </div>
                 </div>
