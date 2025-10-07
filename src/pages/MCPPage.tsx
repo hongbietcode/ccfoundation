@@ -1,4 +1,5 @@
 import { useState, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,6 +14,7 @@ import { vscodeLight } from "@uiw/codemirror-theme-vscode";
 
 
 function MCPPageContent() {
+  const { t } = useTranslation();
   const { data: mcpServers } = useGlobalMcpServers();
   const updateMcpServer = useUpdateGlobalMcpServer();
   const deleteMcpServer = useDeleteGlobalMcpServer();
@@ -37,8 +39,8 @@ function MCPPageContent() {
         serverConfig: configObject
       });
     } catch (error) {
-      await message(`Invalid JSON configuration for ${serverName}`, {
-        title: "Invalid JSON",
+      await message(t('mcp.invalidJsonError', { serverName }), {
+        title: t('mcp.invalidJsonTitle'),
         kind: "error"
       });
     }
@@ -47,8 +49,8 @@ function MCPPageContent() {
   const handleDeleteServer = async (serverName: string) => {
     // Show confirmation dialog
     const confirmed = await ask(
-      `Are you sure you want to delete the MCP server "${serverName}"? This action cannot be undone.`,
-      { title: "Delete MCP Server", kind: "warning" }
+      t('mcp.deleteServerConfirm', { serverName }),
+      { title: t('mcp.deleteServerTitle'), kind: "warning" }
     );
 
     if (confirmed) {
@@ -67,23 +69,23 @@ function MCPPageContent() {
     <div className="">
       <div className="flex items-center p-3 border-b px-3 justify-between sticky top-0 bg-background z-10" data-tauri-drag-region>
         <div data-tauri-drag-region>
-          <h3 className="font-bold" data-tauri-drag-region>MCP</h3>
+          <h3 className="font-bold" data-tauri-drag-region>{t('mcp.title')}</h3>
           <p className="text-sm text-muted-foreground" data-tauri-drag-region>
-            Claude Code 全局 MCP 服务配置
+            {t('mcp.description')}
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="ghost" className="text-muted-foreground" size="sm">
               <PlusIcon size={14} />
-              添加 MCP 服务
+              {t('mcp.addServer')}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-[700px] h-[500px]">
             <DialogHeader>
-              <DialogTitle className="text-primary text-sm">添加 MCP 服务</DialogTitle>
+              <DialogTitle className="text-primary text-sm">{t('mcp.addServerTitle')}</DialogTitle>
               <DialogDescription className="text-muted-foreground text-sm">
-                添加全局 MCP 服务，可跨项目使用
+                {t('mcp.addServerDescription')}
               </DialogDescription>
             </DialogHeader>
             <div className="py-3 mt-3">
@@ -103,7 +105,7 @@ function MCPPageContent() {
       <div className="">
         {serverEntries.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
-            No MCP servers configured. Click "添加 MCP 服务" to add one.
+            {t('mcp.noServersConfigured')}
           </div>
         ) : (
           <Accordion type="multiple" className="">
@@ -135,7 +137,7 @@ function MCPPageContent() {
                         size="sm"
                       >
                         <SaveIcon size={14} className="" />
-                        {updateMcpServer.isPending ? "Saving..." : "Save"}
+                        {updateMcpServer.isPending ? t('mcp.saving') : t('mcp.save')}
                       </Button>
 
                       <Button
@@ -208,6 +210,7 @@ const builtInMcpServers = [
 ];
 
 function MCPCreatePanel({ onClose }: { onClose?: () => void }) {
+  const { t } = useTranslation();
   const [currentTab, setCurrentTab] = useState<("recommend" | "manual")>("recommend");
 
   return (
@@ -216,12 +219,12 @@ function MCPCreatePanel({ onClose }: { onClose?: () => void }) {
         <Button size="sm" variant={
           currentTab === "recommend" ? "secondary" : "ghost"
         } className="text-sm" onClick={() => setCurrentTab("recommend")}>
-          推荐
+          {t('mcp.recommend')}
         </Button>
         <Button size="sm" variant={
           currentTab === "manual" ? "secondary" : "ghost"
         } className="text-sm" onClick={() => setCurrentTab("manual")}>
-          自定义
+          {t('mcp.custom')}
         </Button>
       </div>
 
@@ -243,6 +246,7 @@ function MCPCreatePanel({ onClose }: { onClose?: () => void }) {
 }
 
 function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
+  const { t } = useTranslation();
   const addMcpServer = useAddGlobalMcpServer();
   const { data: mcpServers } = useGlobalMcpServers();
 
@@ -252,8 +256,8 @@ function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
       const exists = mcpServers && Object.keys(mcpServers).includes(mcpServer.name);
 
       if (exists) {
-        await message(`MCP server "${mcpServer.name}" already exists`, {
-          title: "MCP Server Exists",
+        await message(t('mcp.serverExistsError', { serverName: mcpServer.name }), {
+          title: t('mcp.serverExistsTitle'),
           kind: "info"
         });
         return;
@@ -261,8 +265,8 @@ function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
 
       // Show confirmation dialog
       const confirmed = await ask(
-        `Do you want to add the ${mcpServer.name} MCP server?`,
-        { title: "Add MCP Server", kind: "info" }
+        t('mcp.addServerConfirm', { serverName: mcpServer.name }),
+        { title: t('mcp.addServerTitle'), kind: "info" }
       );
 
       if (confirmed) {
@@ -281,7 +285,7 @@ function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
       }
     } catch (error) {
       console.error("Failed to add MCP server:", error);
-      await message("Failed to add MCP server", {
+      await message(t('mcp.addServerError'), {
         title: "Error",
         kind: "error"
       });
@@ -306,7 +310,7 @@ function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
               className="text-sm text-muted-foreground flex items-center gap-1 hover:underline"
             >
               <ExternalLinkIcon size={12} />
-              Source
+              {t('mcp.source')}
             </a>
           </div>
           <div>
@@ -326,6 +330,7 @@ function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
 }
 
 function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
+  const { t } = useTranslation();
   const [customConfig, setCustomConfig] = useState("");
   const addMcpServer = useAddGlobalMcpServer();
   const { data: mcpServers } = useGlobalMcpServers();
@@ -337,8 +342,8 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
       try {
         configObject = JSON.parse(customConfig);
       } catch (error) {
-        await message("Invalid JSON format. Please enter a valid JSON configuration.", {
-          title: "Invalid JSON",
+        await message(t('mcp.addCustomServerError'), {
+          title: t('mcp.invalidJsonTitle'),
           kind: "error"
         });
         return;
@@ -346,7 +351,7 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
 
       // Check if it's an object with at least one server
       if (typeof configObject !== "object" || configObject === null) {
-        await message("Configuration must be a JSON object.", {
+        await message(t('mcp.invalidConfigError'), {
           title: "Invalid Configuration",
           kind: "error"
         });
@@ -355,7 +360,7 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
 
       const serverNames = Object.keys(configObject);
       if (serverNames.length === 0) {
-        await message("Configuration must contain at least one MCP server.", {
+        await message(t('mcp.noServersError'), {
           title: "Invalid Configuration",
           kind: "error"
         });
@@ -367,8 +372,8 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
       const duplicateNames = serverNames.filter(name => existingNames.includes(name));
 
       if (duplicateNames.length > 0) {
-        await message(`MCP server(s) already exist: ${duplicateNames.join(", ")}`, {
-          title: "Duplicate MCP Servers",
+        await message(t('mcp.duplicateServersError', { servers: duplicateNames.join(", ") }), {
+          title: t('mcp.duplicateServersTitle'),
           kind: "warning"
         });
         return;
@@ -376,8 +381,8 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
 
       // Show confirmation dialog
       const confirmed = await ask(
-        `Do you want to add ${serverNames.length} MCP server(s)?`,
-        { title: "Add Custom MCP Servers", kind: "info" }
+        t('mcp.addCustomServersConfirm', { count: serverNames.length }),
+        { title: t('mcp.addCustomServersTitle'), kind: "info" }
       );
 
       if (confirmed) {
@@ -395,7 +400,7 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
       }
     } catch (error) {
       console.error("Failed to add custom MCP servers:", error);
-      await message("Failed to add MCP servers", {
+      await message(t('mcp.addServerError'), {
         title: "Error",
         kind: "error"
       });
@@ -412,18 +417,7 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
             height="240px"
             theme={vscodeLight}
             extensions={[json()]}
-            placeholder={`example:
-
-{
-  "postgres": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "@modelcontextprotocol/server-postgres",
-      "postgresql://localhost/mydb"
-    ]
-  }
-}`}
+            placeholder={t('mcp.customPlaceholder')}
           />
         </div>
 
@@ -435,7 +429,7 @@ function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
             onClick={handleAddCustomMcpServer}
             disabled={!customConfig.trim()}
           >
-            添加
+            {t('mcp.add')}
           </Button>
         </div>
       </div>
