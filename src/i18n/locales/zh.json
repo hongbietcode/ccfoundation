@@ -19,7 +19,7 @@
   "configSwitcher.createConfig": "新建配置",
   "configSwitcher.allConfigs": "所有配置",
   "configSwitcher.title": "配置",
-  "configSwitcher.description": "创建并切换多个配置",
+  "configSwitcher.description": "创建并切换多个 Claude Code 配置",
   "configEditor.save": "保存",
   "configEditor.configName": "配置名",
   "configEditor.deleteConfirm": "确定要删除配置 \"{{name}}\" 吗？此操作无法撤销。",
