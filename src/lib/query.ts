@@ -446,7 +446,7 @@ export const useSendTestNotification = () => {
     mutationFn: (hookType: string) => {
       return invoke<void>("send_test_notification", { hookType });
     },
-    onSuccess: (_, hookType) => {
+    onSuccess: () => {
       toast.success(`Test notification sent`);
     },
     onError: (error) => {
