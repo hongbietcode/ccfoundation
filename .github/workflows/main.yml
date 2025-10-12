@@ -86,6 +86,23 @@ jobs:
           echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
           echo "Certificate imported."
 
+      - name: Get version and prepare release body
+        id: release_info
+        run: |
+          VERSION="${{ inputs.version || '0.2.3' }}"
+          CHANGELOG_FILE="changelog/${VERSION}.md"
+
+          if [ -f "$CHANGELOG_FILE" ]; then
+            RELEASE_BODY=$(cat "$CHANGELOG_FILE")
+            echo "release_body<<EOF" >> $GITHUB_OUTPUT
+            echo "$RELEASE_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "Using changelog file: $CHANGELOG_FILE"
+          else
+            echo "release_body=${{ inputs.releaseBody }}" >> $GITHUB_OUTPUT
+            echo "Using default release body: ${{ inputs.releaseBody }}"
+          fi
+
       - name: build and publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -104,7 +121,7 @@ jobs:
           releaseCommitish: main
           tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
           releaseName: "App v__VERSION__"
-          releaseBody: ${{ inputs.releaseBody }}
+          releaseBody: ${{ steps.release_info.outputs.release_body }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
