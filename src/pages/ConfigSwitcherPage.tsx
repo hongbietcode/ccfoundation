@@ -5,7 +5,8 @@ import { EllipsisVerticalIcon, PencilLineIcon, PlusIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { GLMDialog } from "@/components/GLMBanner";
-import { ZAI } from "@lobehub/icons";
+import { MiniMaxDialog } from "@/components/MiniMaxDialog";
+import { Minimax, ZAI } from "@lobehub/icons";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
   DropdownMenu,
@@ -68,12 +69,20 @@ function ConfigStores() {
             {t("configSwitcher.description")}
           </p>
 
-          <div className="mt-4">
+          <div className="mt-4 space-y-2">
             <GLMDialog
               trigger={
                 <Button variant="ghost" className="text-muted-foreground text-sm" size="sm">
                   <ZAI />
                   {t('glm.useZhipuGlm')}
+                </Button>
+              }
+            />
+            <MiniMaxDialog
+              trigger={
+                <Button variant="ghost" className="text-muted-foreground text-sm" size="sm">
+                  <Minimax />
+                  {t('minimax.useMiniMax')}
                 </Button>
               }
             />
@@ -109,6 +118,14 @@ function ConfigStores() {
                   <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                     <ZAI />
                     {t('glm.useZhipuGlm')}
+                  </DropdownMenuItem>
+                }
+              />
+              <MiniMaxDialog
+                trigger={
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    <Minimax />
+                    {t('minimax.useMiniMax')}
                   </DropdownMenuItem>
                 }
               />

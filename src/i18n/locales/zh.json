@@ -197,5 +197,20 @@
   "glm.zhipuApiKeyPlaceholder": "请输入您的智谱 API Key",
   "glm.creating": "创建中...",
   "glm.createConfig": "创建配置",
-  "glm.useZhipuGlm": "使用智谱GLM"
+  "glm.useZhipuGlm": "使用智谱GLM",
+  "minimax.configMainland": "配置 MiniMax (中国)",
+  "minimax.configInternational": "配置 MiniMax (国际)",
+  "minimax.description": "在 Claude Code 中使用 MiniMax",
+  "minimax.minimax": "MiniMax",
+  "minimax.chinaMainland": "中国大陆 (minimaxi.com)",
+  "minimax.international": "国际 (minimax.io)",
+  "minimax.step1": "第 1 步：创建 API Key",
+  "minimax.enterConsole": "进入控制台",
+  "minimax.step2": "第 2 步：输入 API Key",
+  "minimax.apiKeyPlaceholder": "请输入您的 MiniMax API Key",
+  "minimax.creating": "创建中...",
+  "minimax.createConfig": "创建配置",
+  "minimax.useMiniMax": "使用 MiniMax",
+  "minimax.mainlandTitle": "MiniMax 中国",
+  "minimax.internationalTitle": "MiniMax 国际"
 }

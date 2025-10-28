@@ -197,5 +197,20 @@
   "glm.zhipuApiKeyPlaceholder": "Enter your Zhipu API Key",
   "glm.creating": "Creating...",
   "glm.createConfig": "Create Configuration",
-  "glm.useZhipuGlm": "Use Z.ai GLM"
+  "glm.useZhipuGlm": "Use Z.ai GLM",
+  "minimax.configMainland": "Configure MiniMax (China)",
+  "minimax.configInternational": "Configure MiniMax (International)",
+  "minimax.description": "Use MiniMax in Claude Code",
+  "minimax.minimax": "MiniMax",
+  "minimax.chinaMainland": "China Mainland (minimaxi.com)",
+  "minimax.international": "International (minimax.io)",
+  "minimax.step1": "Step 1: Create API Key",
+  "minimax.enterConsole": "Enter Console",
+  "minimax.step2": "Step 2: Enter API Key",
+  "minimax.apiKeyPlaceholder": "Enter your MiniMax API Key",
+  "minimax.creating": "Creating...",
+  "minimax.createConfig": "Create Configuration",
+  "minimax.useMiniMax": "Use MiniMax",
+  "minimax.mainlandTitle": "MiniMax China",
+  "minimax.internationalTitle": "MiniMax International"
 }
