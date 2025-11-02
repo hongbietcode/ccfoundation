@@ -16,6 +16,8 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { cn, isMacOS } from "../lib/utils";
 import { UpdateButton } from "./UpdateButton";
 import { ScrollArea } from "./ui/scroll-area";
+import { version } from "@tauri-apps/plugin-os";
+import { getVersion } from "@tauri-apps/api/app";
 
 export function Layout() {
 	const { t } = useTranslation();
@@ -131,6 +133,9 @@ export function Layout() {
 						</ul>
 
 						<div className="space-y-2">
+							<div className="text-xs text-muted-foreground p-4">
+								CC Mate v{getVersion()}
+							</div>
 							<UpdateButton />
 						</div>
 					</div>
