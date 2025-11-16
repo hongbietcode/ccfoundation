@@ -25,7 +25,8 @@
       "Bash(do echo:*)",
       "Bash(jq:*)",
       "Bash(done)",
-      "Bash(pnpm exec biome format:*)"
+      "Bash(pnpm exec biome format:*)",
+      "Bash(gh run list:*)"
     ],
     "deny": [],
     "ask": []
