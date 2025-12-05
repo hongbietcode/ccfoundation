@@ -36,7 +36,10 @@
       "Bash(gh repo create:*)",
       "Bash(git push:*)",
       "Bash(gh issue view:*)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
