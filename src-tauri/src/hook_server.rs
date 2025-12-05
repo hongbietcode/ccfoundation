@@ -64,22 +64,8 @@ async fn handle_hook_event(
             .unwrap_or_else(|_| "Failed to serialize".to_string())
     );
 
-    // Check notification settings before sending notification
-    if let Ok(Some(settings)) = crate::commands::get_notification_settings().await {
-        if settings.enable && settings.enabled_hooks.contains(&payload.hook_event_name) {
-            // Send notification based on the hook event
-            send_hook_notification(&payload, &app_handle).await;
-        } else {
-            println!(
-                "🔕 Hook '{}' is not enabled in notification settings, skipping notification",
-                payload.hook_event_name
-            );
-        }
-    } else {
-        println!("⚠️ Could not get notification settings, defaulting to sending notification");
-        // Send notification based on the hook event (fallback behavior)
-        send_hook_notification(&payload, &app_handle).await;
-    }
+    // Send notification based on the hook event
+    send_hook_notification(&payload, &app_handle).await;
 
     (StatusCode::OK, "Hook received")
 }

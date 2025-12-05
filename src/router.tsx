@@ -8,7 +8,6 @@ import { ConfigSwitcherPage } from "./pages/ConfigSwitcherPage";
 import { ContextSelectorPage } from "./pages/ContextSelectorPage";
 import { MCPPage } from "./pages/MCPPage";
 import { MemoryPage } from "./pages/MemoryPage";
-import { NotificationPage } from "./pages/NotificationPage";
 import { UsagePage } from "./pages/UsagePage";
 
 const router = createBrowserRouter([
@@ -79,14 +78,6 @@ const router = createBrowserRouter([
 				),
 			},
 			{
-				path: "notification",
-				element: (
-					<RouteWrapper>
-						<NotificationPage />
-					</RouteWrapper>
-				),
-			},
-			{
 				path: "commands",
 				element: (
 					<RouteWrapper>
@@ -138,26 +129,10 @@ const router = createBrowserRouter([
 				),
 			},
 			{
-				path: "usage",
-				element: (
-					<RouteWrapper>
-						<UsagePage />
-					</RouteWrapper>
-				),
-			},
-			{
 				path: "memory",
 				element: (
 					<RouteWrapper>
 						<MemoryPage />
-					</RouteWrapper>
-				),
-			},
-			{
-				path: "notification",
-				element: (
-					<RouteWrapper>
-						<NotificationPage />
 					</RouteWrapper>
 				),
 			},

@@ -1,6 +1,5 @@
 import {
 	ActivityIcon,
-	BellIcon,
 	BotIcon,
 	BrainIcon,
 	ChevronLeftIcon,
@@ -34,6 +33,7 @@ export function ContextLayout() {
 		? `/context/project/${encodeURIComponent(projectPath)}`
 		: `/context/${contextType || "global"}`;
 
+	// Build navLinks based on context
 	const navLinks = [
 		{
 			to: `${basePath}`,
@@ -61,16 +61,12 @@ export function ContextLayout() {
 			icon: BrainIcon,
 			label: t("navigation.memory"),
 		},
-		{
-			to: `${basePath}/notification`,
-			icon: BellIcon,
-			label: t("navigation.notifications"),
-		},
-		{
+		// Usage only for global context
+		...(!projectPath ? [{
 			to: `${basePath}/usage`,
 			icon: ActivityIcon,
 			label: t("navigation.usage"),
-		},
+		}] : []),
 	];
 
 	const handleBackToSelector = () => {

@@ -86,13 +86,6 @@ pub struct McpServer {
 pub struct StoresData {
     pub configs: Vec<ConfigStore>,
     pub distinct_id: Option<String>,
-    pub notification: Option<NotificationSettings>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct NotificationSettings {
-    pub enable: bool,
-    pub enabled_hooks: Vec<String>,
 }
 
 #[tauri::command]
@@ -282,23 +275,6 @@ pub async fn get_stores() -> Result<Vec<ConfigStore>, String> {
     let mut stores_data: StoresData = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse stores file: {}", e))?;
 
-    // Add default notification settings if they don't exist
-    if stores_data.notification.is_none() {
-        stores_data.notification = Some(NotificationSettings {
-            enable: true,
-            enabled_hooks: vec!["Notification".to_string()],
-        });
-
-        // Write back to stores file with notification settings added
-        let json_content = serde_json::to_string_pretty(&stores_data)
-            .map_err(|e| format!("Failed to serialize stores: {}", e))?;
-
-        std::fs::write(&stores_file, json_content)
-            .map_err(|e| format!("Failed to write stores file: {}", e))?;
-
-        println!("Added default notification settings to existing stores.json");
-    }
-
     let mut stores_vec = stores_data.configs;
     // Sort by createdAt in ascending order (oldest first)
     stores_vec.sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -331,10 +307,6 @@ pub async fn create_config(
         StoresData {
             configs: vec![],
             distinct_id: None,
-            notification: Some(NotificationSettings {
-                enable: true,
-                enabled_hooks: vec!["Notification".to_string()],
-            }),
         }
     };
 
@@ -941,7 +913,7 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, Stri
     match app.updater() {
         Ok(updater) => {
             println!("✅ Updater initialized successfully");
-            println!("📡 Checking update endpoint: https://github.com/djyde/ccmate-release/releases/latest/download/latest.json");
+            println!("📡 Checking update endpoint: https://github.com/djyde/ccfoundation-release/releases/latest/download/latest.json");
 
             match updater.check().await {
                 Ok(Some(update)) => {
@@ -1385,10 +1357,6 @@ async fn get_or_create_distinct_id() -> Result<String, String> {
         StoresData {
             configs: vec![],
             distinct_id: None,
-            notification: Some(NotificationSettings {
-                enable: true,
-                enabled_hooks: vec!["Notification".to_string()],
-            }),
         }
     };
 
@@ -1664,20 +1632,20 @@ pub async fn track(
 fn get_latest_hook_command() -> serde_json::Value {
     if cfg!(target_os = "windows") {
         serde_json::json!({
-            "__ccmate__": true,
+            "__ccfoundation__": true,
             "type": "command",
             "command": "powershell -Command \"try { Invoke-RestMethod -Uri http://localhost:59948/claude_code/hooks -Method POST -ContentType 'application/json' -Body $input -ErrorAction Stop } catch { '' }\""
         })
     } else {
         serde_json::json!({
-            "__ccmate__": true,
+            "__ccfoundation__": true,
             "type": "command",
             "command": "curl -s -X POST http://localhost:59948/claude_code/hooks -H 'Content-Type: application/json' --data-binary @- 2>/dev/null || echo"
         })
     }
 }
 
-/// Update existing ccmate hooks for specified events (doesn't add new ones)
+/// Update existing ccfoundation hooks for specified events (doesn't add new ones)
 fn update_existing_hooks(
     hooks_obj: &mut serde_json::Map<String, serde_json::Value>,
     events: &[&str],
@@ -1692,11 +1660,11 @@ fn update_existing_hooks(
 
     for event in events {
         if let Some(event_hooks) = hooks_obj.get_mut(*event).and_then(|h| h.as_array_mut()) {
-            // Find and update existing ccmate hooks only
+            // Find and update existing ccfoundation hooks only
             for entry in event_hooks.iter_mut() {
                 if let Some(hooks_array) = entry.get_mut("hooks").and_then(|h| h.as_array_mut()) {
                     for hook in hooks_array.iter_mut() {
-                        if hook.get("__ccmate__").is_some() {
+                        if hook.get("__ccfoundation__").is_some() {
                             // Compare only the command string, not the entire JSON object
                             if let Some(existing_command) =
                                 hook.get("command").and_then(|cmd| cmd.as_str())
@@ -1722,7 +1690,7 @@ fn update_existing_hooks(
     Ok(hook_updated)
 }
 
-/// Update or add ccmate hooks for specified events
+/// Update or add ccfoundation hooks for specified events
 fn update_or_add_hooks(
     hooks_obj: &mut serde_json::Map<String, serde_json::Value>,
     events: &[&str],
@@ -1732,11 +1700,11 @@ fn update_or_add_hooks(
 
     for event in events {
         if let Some(event_hooks) = hooks_obj.get_mut(*event).and_then(|h| h.as_array_mut()) {
-            // Find and update existing ccmate hooks
+            // Find and update existing ccfoundation hooks
             for entry in event_hooks.iter_mut() {
                 if let Some(hooks_array) = entry.get_mut("hooks").and_then(|h| h.as_array_mut()) {
                     for hook in hooks_array.iter_mut() {
-                        if hook.get("__ccmate__").is_some() {
+                        if hook.get("__ccfoundation__").is_some() {
                             // Update the command to the latest version
                             if hook.get("command") != latest_hook_command.get("command") {
                                 *hook = latest_hook_command.clone();
@@ -1747,57 +1715,38 @@ fn update_or_add_hooks(
                 }
             }
 
-            // If no ccmate hooks found, add one
-            let ccmate_hook_exists = event_hooks.iter().any(|entry| {
+            // If no ccfoundation hooks found, add one
+            let ccfoundation_hook_exists = event_hooks.iter().any(|entry| {
                 if let Some(hooks_array) = entry.get("hooks").and_then(|h| h.as_array()) {
                     hooks_array
                         .iter()
-                        .any(|hook| hook.get("__ccmate__").is_some())
+                        .any(|hook| hook.get("__ccfoundation__").is_some())
                 } else {
                     false
                 }
             });
 
-            if !ccmate_hook_exists {
-                let ccmate_hook_entry = serde_json::json!({
+            if !ccfoundation_hook_exists {
+                let ccfoundation_hook_entry = serde_json::json!({
                     "hooks": [latest_hook_command.clone()]
                 });
-                event_hooks.push(ccmate_hook_entry);
+                event_hooks.push(ccfoundation_hook_entry);
                 hook_updated = true;
             }
         } else {
-            // Create event hooks array with ccmate hook
-            let ccmate_hook_entry = serde_json::json!({
+            // Create event hooks array with ccfoundation hook
+            let ccfoundation_hook_entry = serde_json::json!({
                 "hooks": [latest_hook_command.clone()]
             });
             hooks_obj.insert(
                 event.to_string(),
-                serde_json::Value::Array(vec![ccmate_hook_entry]),
+                serde_json::Value::Array(vec![ccfoundation_hook_entry]),
             );
             hook_updated = true;
         }
     }
 
     Ok(hook_updated)
-}
-
-#[tauri::command]
-pub async fn get_notification_settings() -> Result<Option<NotificationSettings>, String> {
-    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
-    let app_config_path = home_dir.join(APP_CONFIG_DIR);
-    let stores_file = app_config_path.join("stores.json");
-
-    if !stores_file.exists() {
-        return Ok(None);
-    }
-
-    let content = std::fs::read_to_string(&stores_file)
-        .map_err(|e| format!("Failed to read stores file: {}", e))?;
-
-    let stores_data: StoresData = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse stores file: {}", e))?;
-
-    Ok(stores_data.notification)
 }
 
 #[tauri::command]
@@ -1919,14 +1868,14 @@ pub async fn remove_claude_code_hook() -> Result<(), String> {
 
         for event in events {
             if let Some(event_hooks) = hooks_obj.get_mut(event).and_then(|h| h.as_array_mut()) {
-                // Remove hooks that have __ccmate__ key from nested hooks arrays
+                // Remove hooks that have __ccfoundation__ key from nested hooks arrays
                 let mut new_event_hooks = Vec::new();
                 for entry in event_hooks.iter() {
                     if let Some(hooks_array) = entry.get("hooks").and_then(|h| h.as_array()) {
-                        // Filter out hooks that have __ccmate__ key
+                        // Filter out hooks that have __ccfoundation__ key
                         let filtered_hooks: Vec<serde_json::Value> = hooks_array
                             .iter()
-                            .filter(|hook| hook.get("__ccmate__").is_none())
+                            .filter(|hook| hook.get("__ccfoundation__").is_none())
                             .cloned()
                             .collect();
 
@@ -1964,55 +1913,6 @@ pub async fn remove_claude_code_hook() -> Result<(), String> {
         .map_err(|e| format!("Failed to write settings.json: {}", e))?;
 
     println!("✅ Claude Code hooks removed successfully");
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn update_notification_settings(settings: NotificationSettings) -> Result<(), String> {
-    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
-    let app_config_path = home_dir.join(APP_CONFIG_DIR);
-    let stores_file = app_config_path.join("stores.json");
-
-    if !stores_file.exists() {
-        // Create stores.json with notification settings if it doesn't exist
-        let stores_data = StoresData {
-            configs: vec![],
-            distinct_id: None,
-            notification: Some(settings.clone()),
-        };
-
-        // Ensure app config directory exists
-        std::fs::create_dir_all(&app_config_path)
-            .map_err(|e| format!("Failed to create app config directory: {}", e))?;
-
-        let json_content = serde_json::to_string_pretty(&stores_data)
-            .map_err(|e| format!("Failed to serialize stores: {}", e))?;
-
-        std::fs::write(&stores_file, json_content)
-            .map_err(|e| format!("Failed to write stores file: {}", e))?;
-
-        println!("Created stores.json with notification settings");
-        return Ok(());
-    }
-
-    // Read existing stores
-    let content = std::fs::read_to_string(&stores_file)
-        .map_err(|e| format!("Failed to read stores file: {}", e))?;
-
-    let mut stores_data: StoresData = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse stores file: {}", e))?;
-
-    // Update notification settings
-    stores_data.notification = Some(settings);
-
-    // Write back to stores file
-    let json_content = serde_json::to_string_pretty(&stores_data)
-        .map_err(|e| format!("Failed to serialize stores: {}", e))?;
-
-    std::fs::write(&stores_file, json_content)
-        .map_err(|e| format!("Failed to write stores file: {}", e))?;
-
-    println!("✅ Notification settings updated successfully");
     Ok(())
 }
 
@@ -2245,7 +2145,6 @@ pub struct ActiveContext {
 pub struct EnhancedStoresData {
     pub configs: Vec<ConfigStore>,
     pub distinct_id: Option<String>,
-    pub notification: Option<NotificationSettings>,
     #[serde(rename = "activeContext")]
     pub active_context: Option<ActiveContext>,
 }
@@ -2351,7 +2250,8 @@ fn get_project_registry_path() -> Result<PathBuf, String> {
 }
 
 /// Read project registry
-fn read_project_registry() -> Result<std::collections::HashMap<String, ProjectRegistryEntry>, String> {
+fn read_project_registry() -> Result<std::collections::HashMap<String, ProjectRegistryEntry>, String>
+{
     let registry_path = get_project_registry_path()?;
 
     if !registry_path.exists() {
@@ -3347,8 +3247,7 @@ pub async fn write_project_mcp(project_path: String, content: Value) -> Result<(
     let json_content = serde_json::to_string_pretty(&content)
         .map_err(|e| format!("Failed to serialize MCP: {}", e))?;
 
-    std::fs::write(&mcp_path, json_content)
-        .map_err(|e| format!("Failed to write MCP: {}", e))?;
+    std::fs::write(&mcp_path, json_content).map_err(|e| format!("Failed to write MCP: {}", e))?;
 
     Ok(())
 }

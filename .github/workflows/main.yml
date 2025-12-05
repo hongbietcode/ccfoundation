@@ -1,153 +1,153 @@
 name: "publish"
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (optional)'
-        required: false
-        type: string
-      create_release:
-        description: 'Create GitHub release'
-        required: true
-        type: boolean
-        default: true
-      releaseBody:
-        description: 'Release notes/body'
-        required: false
-        type: string
-        default: 'small bugfix and improvement'
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version to release (optional)"
+                required: false
+                type: string
+            create_release:
+                description: "Create GitHub release"
+                required: true
+                type: boolean
+                default: true
+            releaseBody:
+                description: "Release notes/body"
+                required: false
+                type: string
+                default: "small bugfix and improvement"
 
 # This is the example for publishing a Universal macOS app with a signing certificate.
 # On each push to the `release` branch it will create or update a GitHub release, build your app, and upload the artifacts to the release.
 
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # for Universal macOS builds (arm64 and x86_64)
-          - platform: "macos-latest"
-            args: "--target universal-apple-darwin"
-          # for Windows builds
-          - platform: "windows-latest"
-            args: "--target x86_64-pc-windows-msvc"
-          # for Linux builds (AppImage)
-          - platform: "ubuntu-latest"
-            args: "--target x86_64-unknown-linux-gnu"
+    publish-tauri:
+        permissions:
+            contents: write
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    # for Universal macOS builds (arm64 and x86_64)
+                    - platform: "macos-latest"
+                      args: "--target universal-apple-darwin"
+                    # for Windows builds
+                    - platform: "windows-latest"
+                      args: "--target x86_64-pc-windows-msvc"
+                    # for Linux builds (AppImage)
+                    - platform: "ubuntu-latest"
+                      args: "--target x86_64-unknown-linux-gnu"
 
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+            - name: setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 10
 
-      - name: setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: 'pnpm'
+            - name: setup node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: lts/*
+                  cache: "pnpm"
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
+            - name: install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
+            - name: Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: "./src-tauri -> target"
 
-      - name: install frontend dependencies
-        run: pnpm i
+            - name: install frontend dependencies
+              run: pnpm i
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+            - name: install dependencies (ubuntu only)
+              if: matrix.platform == 'ubuntu-latest'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: import Apple Developer Certificate
-        # Prevents keychain from locking automatically for 3600 seconds.
-        if: matrix.platform == 'macos-latest'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          security find-identity -v -p codesigning build.keychain
+            - name: import Apple Developer Certificate
+              # Prevents keychain from locking automatically for 3600 seconds.
+              if: matrix.platform == 'macos-latest'
+              env:
+                  APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+                  APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+                  KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+              run: |
+                  echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+                  security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+                  security default-keychain -s build.keychain
+                  security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+                  security set-keychain-settings -t 3600 -u build.keychain
+                  security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+                  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+                  security find-identity -v -p codesigning build.keychain
 
-      - name: verify certificate
-        if: matrix.platform == 'macos-latest'
-        run: |
-          CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
-          CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
-          echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
-          echo "Certificate imported."
+            - name: verify certificate
+              if: matrix.platform == 'macos-latest'
+              run: |
+                  CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
+                  CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
+                  echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
+                  echo "Certificate imported."
 
-      - name: Get version and prepare release body
-        id: release_info
-        shell: bash
-        run: |
-          VERSION="${{ inputs.version || '0.2.3' }}"
-          CHANGELOG_FILE="changelog/${VERSION}.md"
+            - name: Get version and prepare release body
+              id: release_info
+              shell: bash
+              run: |
+                  VERSION="${{ inputs.version || '0.2.3' }}"
+                  CHANGELOG_FILE="changelog/${VERSION}.md"
 
-          if [ -f "$CHANGELOG_FILE" ]; then
-            RELEASE_BODY=$(cat "$CHANGELOG_FILE")
-            echo "release_body<<EOF" >> $GITHUB_OUTPUT
-            echo "$RELEASE_BODY" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "Using changelog file: $CHANGELOG_FILE"
-          else
-            echo "release_body=${{ inputs.releaseBody }}" >> $GITHUB_OUTPUT
-            echo "Using default release body: ${{ inputs.releaseBody }}"
-          fi
+                  if [ -f "$CHANGELOG_FILE" ]; then
+                    RELEASE_BODY=$(cat "$CHANGELOG_FILE")
+                    echo "release_body<<EOF" >> $GITHUB_OUTPUT
+                    echo "$RELEASE_BODY" >> $GITHUB_OUTPUT
+                    echo "EOF" >> $GITHUB_OUTPUT
+                    echo "Using changelog file: $CHANGELOG_FILE"
+                  else
+                    echo "release_body=${{ inputs.releaseBody }}" >> $GITHUB_OUTPUT
+                    echo "Using default release body: ${{ inputs.releaseBody }}"
+                  fi
 
-      - name: build and publish
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ env.CERT_ID }}
-        with:
-          owner: djyde
-          repo: ccmate-release
-          releaseCommitish: main
-          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: "App v__VERSION__"
-          releaseBody: ${{ steps.release_info.outputs.release_body }}
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+            - name: build and publish
+              uses: tauri-apps/tauri-action@v0
+              env:
+                  GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+                  APPLE_ID: ${{ secrets.APPLE_ID }}
+                  APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+                  APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+                  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+                  APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+                  APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+                  APPLE_SIGNING_IDENTITY: ${{ env.CERT_ID }}
+              with:
+                  owner: djyde
+                  repo: ccfoundation-release
+                  releaseCommitish: main
+                  tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+                  releaseName: "App v__VERSION__"
+                  releaseBody: ${{ steps.release_info.outputs.release_body }}
+                  releaseDraft: true
+                  prerelease: false
+                  args: ${{ matrix.args }}
 
-  notify-build-success:
-    needs: publish-tauri
-    runs-on: ubuntu-latest
-    if: ${{ success() }}
-    steps:
-      - name: Send build success notification
-        run: |
-          curl \
-            -H "Title: CC Mate build finished" \
-            -H "Tags: ccmate,github_action" \
-            -d "✅  CC Mate build has finished. Ready to release." \
-            https://ntfy.sh/randyloop
+    notify-build-success:
+        needs: publish-tauri
+        runs-on: ubuntu-latest
+        if: ${{ success() }}
+        steps:
+            - name: Send build success notification
+              run: |
+                  curl \
+                    -H "Title: CC Mate build finished" \
+                    -H "Tags: ccfoundation,github_action" \
+                    -d "✅  CC Mate build has finished. Ready to release." \
+                    https://ntfy.sh/randyloop

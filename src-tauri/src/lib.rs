@@ -13,7 +13,6 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .setup(|app| {
             // Configure window for macOS
@@ -197,8 +196,6 @@ pub fn run() {
             read_project_memory,
             write_project_memory,
             track,
-            get_notification_settings,
-            update_notification_settings,
             add_claude_code_hook,
             update_claude_code_hook,
             remove_claude_code_hook,
