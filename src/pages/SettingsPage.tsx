@@ -6,13 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaXTwitter } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCheckForUpdates, useInstallAndRestart } from "@/lib/query";
 
 export function SettingsPage() {
@@ -20,8 +14,7 @@ export function SettingsPage() {
 	const { theme, setTheme } = useTheme();
 
 	const { data: updateInfo, isLoading: checkingUpdate } = useCheckForUpdates();
-	const { mutate: installUpdate, isPending: installingUpdate } =
-		useInstallAndRestart();
+	const { mutate: installUpdate, isPending: installingUpdate } = useInstallAndRestart();
 	const [version, setVersion] = useState<string>("");
 
 	useEffect(() => {
@@ -38,10 +31,7 @@ export function SettingsPage() {
 
 	return (
 		<div className="">
-			<div
-				className="flex items-center p-3 border-b px-3 justify-between sticky top-0 bg-background z-10 mb-4"
-				data-tauri-drag-region
-			>
+			<div className="flex items-center p-3 border-b px-3 justify-between sticky top-0 bg-background z-10 mb-4" data-tauri-drag-region>
 				<div data-tauri-drag-region>
 					<h3 className="font-bold" data-tauri-drag-region>
 						{t("settings.title")}
@@ -50,9 +40,7 @@ export function SettingsPage() {
 			</div>
 			<div className="space-y-6 px-4 ">
 				<div>
-					<label className="block text-sm font-medium mb-2 mx-2">
-						{t("settings.language")}
-					</label>
+					<label className="block text-sm font-medium mb-2 mx-2">{t("settings.language")}</label>
 					<Select value={i18n.language} onValueChange={handleLanguageChange}>
 						<SelectTrigger className="w-[150px]">
 							<SelectValue placeholder={t("settings.language")} />
@@ -67,17 +55,13 @@ export function SettingsPage() {
 				</div>
 
 				<div>
-					<label className="block text-sm font-medium mb-2 mx-2">
-						{t("settings.theme")}
-					</label>
+					<label className="block text-sm font-medium mb-2 mx-2">{t("settings.theme")}</label>
 					<Select value={theme || "system"} onValueChange={setTheme}>
 						<SelectTrigger className="w-[150px]">
 							<SelectValue placeholder={t("settings.theme")} />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="system">
-								{t("settings.theme.system")}
-							</SelectItem>
+							<SelectItem value="system">{t("settings.theme.system")}</SelectItem>
 							<SelectItem value="light">{t("settings.theme.light")}</SelectItem>
 							<SelectItem value="dark">{t("settings.theme.dark")}</SelectItem>
 						</SelectContent>
@@ -85,9 +69,7 @@ export function SettingsPage() {
 				</div>
 
 				<div>
-					<label className="block text-sm font-medium mb-2 mx-2">
-						{t("settings.version")}
-					</label>
+					<label className="block text-sm font-medium mb-2 mx-2">{t("settings.version")}</label>
 					<div className="flex items-center gap-2 mx-2">
 						<p className="text-sm text-muted-foreground">v{version}</p>
 						{checkingUpdate ? (
@@ -102,12 +84,7 @@ export function SettingsPage() {
 										version: updateInfo.version,
 									})}
 								</span>
-								<Button
-									onClick={handleInstallUpdate}
-									disabled={installingUpdate}
-									variant="default"
-									size="sm"
-								>
+								<Button onClick={handleInstallUpdate} disabled={installingUpdate} variant="default" size="sm">
 									{installingUpdate ? (
 										<>
 											<RotateCwIcon className="w-4 h-4 animate-spin mr-1" />
@@ -122,26 +99,18 @@ export function SettingsPage() {
 								</Button>
 							</div>
 						) : (
-							<span className="text-sm text-muted-foreground">
-								{t("settings.upToDate")}
-							</span>
+							<span className="text-sm text-muted-foreground">{t("settings.upToDate")}</span>
 						)}
 					</div>
-					{updateInfo?.body && (
-						<p className="text-xs text-muted-foreground mx-2 mt-1">
-							{updateInfo.body}
-						</p>
-					)}
+					{updateInfo?.body && <p className="text-xs text-muted-foreground mx-2 mt-1">{updateInfo.body}</p>}
 				</div>
 
 				<div>
-					<label className="block text-sm font-medium mb-2 mx-2">
-						{t("settings.contact")}
-					</label>
+					<label className="block text-sm font-medium mb-2 mx-2">{t("settings.contact")}</label>
 					<div className="flex items-center gap-2">
 						<Button
 							onClick={(_) => {
-								openUrl("https://github.com/djyde/ccmate-release/issues");
+								openUrl("https://github.com/hongbietcode/ccfoundation-release/issues");
 							}}
 							variant="outline"
 							size="sm"

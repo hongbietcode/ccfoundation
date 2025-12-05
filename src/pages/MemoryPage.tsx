@@ -6,15 +6,23 @@ import { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useClaudeMemory, useWriteClaudeMemory } from "@/lib/query";
+import { useConfigContext } from "@/contexts/ConfigContext";
+import {
+	useClaudeMemory,
+	useProjectMemory,
+	useWriteClaudeMemory,
+	useWriteProjectMemory,
+} from "@/lib/query";
 import { useCodeMirrorTheme } from "@/lib/use-codemirror-theme";
 
 function MemoryPageHeader({
 	onSave,
 	saving,
+	memoryPath,
 }: {
 	onSave: () => void;
 	saving: boolean;
+	memoryPath?: string;
 }) {
 	const { t } = useTranslation();
 
@@ -28,7 +36,7 @@ function MemoryPageHeader({
 					{t("memory.title")}
 				</h3>
 				<p className="text-sm text-muted-foreground">
-					{t("memory.description")}
+					{memoryPath || t("memory.description")}
 				</p>
 			</div>
 			<Button
@@ -76,8 +84,17 @@ function MemoryPageSkeleton() {
 }
 
 function MemoryPageContent() {
-	const { data: memoryData } = useClaudeMemory();
-	const { mutate: saveMemory, isPending: saving } = useWriteClaudeMemory();
+	const { isProject, projectPath } = useConfigContext();
+
+	// Always call both hooks (React rules), choose which data to use
+	const { data: globalMemory } = useClaudeMemory();
+	const { data: projectMemory } = useProjectMemory(projectPath || "");
+	const memoryData = isProject && projectPath ? projectMemory : globalMemory;
+
+	const { mutate: saveGlobalMemory, isPending: savingGlobal } = useWriteClaudeMemory();
+	const { mutate: saveProjectMemory, isPending: savingProject } = useWriteProjectMemory();
+	const saving = isProject && projectPath ? savingProject : savingGlobal;
+
 	const [content, setContent] = useState<string>("");
 	const codeMirrorTheme = useCodeMirrorTheme();
 
@@ -89,7 +106,11 @@ function MemoryPageContent() {
 	}, [memoryData]);
 
 	const handleSave = () => {
-		saveMemory(content);
+		if (isProject && projectPath) {
+			saveProjectMemory({ projectPath, content });
+		} else {
+			saveGlobalMemory(content);
+		}
 	};
 
 	const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,7 +131,7 @@ function MemoryPageContent() {
 
 	return (
 		<div className="flex flex-col h-screen">
-			<MemoryPageHeader onSave={handleSave} saving={saving} />
+			<MemoryPageHeader onSave={handleSave} saving={saving} memoryPath={memoryData?.path} />
 
 			<div className="flex-1 p-4 overflow-hidden">
 				<div className="rounded-lg overflow-hidden border h-full">
@@ -125,7 +146,7 @@ function MemoryPageContent() {
 							}),
 							EditorView.lineWrapping,
 						]}
-						placeholder="~/.claude/CLAUDE.md"
+						placeholder={memoryData?.path || "~/.claude/CLAUDE.md"}
 						onChange={(value) => setContent(value)}
 						theme={codeMirrorTheme}
 						basicSetup={{

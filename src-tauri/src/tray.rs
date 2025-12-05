@@ -32,7 +32,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::er
     let tray_builder = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .menu(&menu)
-        .tooltip("CC Mate - Config Manager")
+        .tooltip("CC Foundation - Config Manager")
         .show_menu_on_left_click(true); // Show menu on left click
 
     // On macOS, make it a template icon for better system integration
@@ -116,7 +116,13 @@ pub async fn build_tray_menu<R: Runtime>(
                 builder = builder.item(&separator);
 
                 // Add "Configs" label
-                let configs_label = tauri::menu::MenuItem::with_id(app, "configs_label", "Configs", false, None::<&str>)?;
+                let configs_label = tauri::menu::MenuItem::with_id(
+                    app,
+                    "configs_label",
+                    "Configs",
+                    false,
+                    None::<&str>,
+                )?;
                 builder = builder.item(&configs_label);
 
                 // Add config items
@@ -243,7 +249,7 @@ pub fn handle_tray_menu_event<R: Runtime>(app_handle: &AppHandle<R>, event_id: &
                         let _ = app_clone
                             .notification()
                             .builder()
-                            .title("CC Mate")
+                            .title("CC Foundation")
                             .body(&notification_body)
                             .show();
                     }
@@ -254,8 +260,8 @@ pub fn handle_tray_menu_event<R: Runtime>(app_handle: &AppHandle<R>, event_id: &
                         let _ = app_clone
                             .notification()
                             .builder()
-                            .title("CC Mate")
-                            .body(&format!("Error: {}", e))
+                            .title("CC Foundation")
+                            .body(format!("Error: {}", e))
                             .show();
                     }
                 }

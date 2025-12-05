@@ -521,7 +521,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cc-mate"
+name = "cc-foundation"
 version = "0.1.0"
 dependencies = [
  "axum",
@@ -531,6 +531,7 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

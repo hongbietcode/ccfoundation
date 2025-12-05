@@ -23,18 +23,47 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useConfigContext } from "@/contexts/ConfigContext";
 import {
 	useClaudeAgents,
 	useDeleteClaudeAgent,
+	useDeleteProjectAgent,
+	useProjectAgents,
 	useWriteClaudeAgent,
+	useWriteProjectAgent,
 } from "@/lib/query";
 import { useCodeMirrorTheme } from "@/lib/use-codemirror-theme";
 
 function AgentsPageContent() {
 	const { t } = useTranslation();
-	const { data: agents, isLoading, error } = useClaudeAgents();
-	const writeAgent = useWriteClaudeAgent();
-	const deleteAgent = useDeleteClaudeAgent();
+	const { isProject, projectPath } = useConfigContext();
+
+	// Always call both hooks (React rules), choose which data to use
+	const { data: globalAgents, isLoading: globalLoading, error: globalError } = useClaudeAgents();
+	const { data: projectAgents, isLoading: projectLoading, error: projectError } = useProjectAgents(projectPath || "");
+	const agents = isProject && projectPath ? projectAgents : globalAgents;
+	const isLoading = isProject && projectPath ? projectLoading : globalLoading;
+	const error = isProject && projectPath ? projectError : globalError;
+
+	const writeGlobalAgent = useWriteClaudeAgent();
+	const writeProjectAgent = useWriteProjectAgent();
+	const writeAgent = isProject && projectPath
+		? {
+				mutate: (params: { agentName: string; content: string }) =>
+					writeProjectAgent.mutate({ projectPath, ...params }),
+				isPending: writeProjectAgent.isPending,
+		  }
+		: writeGlobalAgent;
+
+	const deleteGlobalAgent = useDeleteClaudeAgent();
+	const deleteProjectAgent = useDeleteProjectAgent();
+	const deleteAgent = isProject && projectPath
+		? {
+				mutate: (agentName: string) =>
+					deleteProjectAgent.mutate({ projectPath, agentName }),
+				isPending: deleteProjectAgent.isPending,
+		  }
+		: deleteGlobalAgent;
 	const [agentEdits, setAgentEdits] = useState<Record<string, string>>({});
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const codeMirrorTheme = useCodeMirrorTheme();
@@ -115,7 +144,11 @@ function AgentsPageContent() {
 								{t("agents.addAgentDescription")}
 							</DialogDescription>
 						</DialogHeader>
-						<CreateAgentPanel onClose={() => setIsDialogOpen(false)} />
+						<CreateAgentPanel
+							onClose={() => setIsDialogOpen(false)}
+							isProject={isProject}
+							projectPath={projectPath}
+						/>
 					</DialogContent>
 				</Dialog>
 			</div>
@@ -139,7 +172,9 @@ function AgentsPageContent() {
 												<BotIcon size={12} />
 												<span className="font-medium">{agent.name}</span>
 												<span className="text-sm text-muted-foreground font-normal">
-													{`~/.claude/agents/${agent.name}.md`}
+													{isProject && projectPath
+														? `${projectPath}/.claude/agents/${agent.name}.md`
+														: `~/.claude/agents/${agent.name}.md`}
 												</span>
 											</div>
 										</AccordionTrigger>
@@ -236,7 +271,15 @@ export function AgentsPage() {
 	);
 }
 
-function CreateAgentPanel({ onClose }: { onClose?: () => void }) {
+function CreateAgentPanel({
+	onClose,
+	isProject,
+	projectPath,
+}: {
+	onClose?: () => void;
+	isProject: boolean;
+	projectPath?: string;
+}) {
 	const { t } = useTranslation();
 	const [agentName, setAgentName] = useState("");
 	const [agentContent, setAgentContent] = useState(`---
@@ -252,8 +295,21 @@ to solving problems.
 
 Include specific instructions, best practices, and any constraints
 the subagent should follow.`);
-	const writeAgent = useWriteClaudeAgent();
-	const { data: agents } = useClaudeAgents();
+	const writeGlobalAgent = useWriteClaudeAgent();
+	const writeProjectAgent = useWriteProjectAgent();
+	const writeAgent = isProject && projectPath
+		? {
+				mutate: (
+					params: { agentName: string; content: string },
+					options?: { onSuccess?: () => void },
+				) => writeProjectAgent.mutate({ projectPath, ...params }, options),
+				isPending: writeProjectAgent.isPending,
+		  }
+		: writeGlobalAgent;
+
+	const { data: globalAgents } = useClaudeAgents();
+	const { data: projectAgents } = useProjectAgents(projectPath || "");
+	const agents = isProject && projectPath ? projectAgents : globalAgents;
 	const codeMirrorTheme = useCodeMirrorTheme();
 
 	const handleCreateAgent = async () => {

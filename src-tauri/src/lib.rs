@@ -1,19 +1,25 @@
 mod commands;
-mod tray;
 mod hook_server;
+mod tray;
 
 use commands::*;
 use hook_server::start_hook_server;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    // Only initialize updater plugin in release builds
+    #[cfg(not(debug_assertions))]
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    #[cfg(debug_assertions)]
+    let builder = tauri::Builder::default();
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .setup(|app| {
             // Configure window for macOS
@@ -99,7 +105,7 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // Initialize system tray
-            if let Err(e) = tray::create_tray(&app.handle()) {
+            if let Err(e) = tray::create_tray(app.handle()) {
                 eprintln!("Failed to create system tray: {}", e);
             }
 
@@ -107,12 +113,12 @@ pub fn run() {
             app.on_menu_event(|app_handle, event| {
                 use tauri::Manager;
                 let event_id = event.id().0.as_str();
-                
+
                 // Try to handle as tray menu event first
-                if tray::handle_tray_menu_event(&app_handle, event_id) {
+                if tray::handle_tray_menu_event(app_handle, event_id) {
                     return;
                 }
-                
+
                 // Handle app menu events
                 match event_id {
                     "open_config_path" => {
@@ -194,9 +200,9 @@ pub fn run() {
             read_project_usage_files,
             read_claude_memory,
             write_claude_memory,
+            read_project_memory,
+            write_project_memory,
             track,
-            get_notification_settings,
-            update_notification_settings,
             add_claude_code_hook,
             update_claude_code_hook,
             remove_claude_code_hook,
@@ -205,7 +211,40 @@ pub fn run() {
             delete_claude_command,
             read_claude_agents,
             write_claude_agent,
-            delete_claude_agent
+            delete_claude_agent,
+            // Per-project configuration commands
+            // OLD centralized storage commands - KEPT for backward compatibility only
+            // get_project_configs,
+            // get_project_config,
+            // create_project_config,
+            // update_project_config,
+            // delete_project_config,
+            // update_project_config_path,
+
+            // REMOVED - Old commands deleted with deprecated code
+            // activate_project_config,
+            // get_active_context,
+            // switch_to_global_context,
+            // check_project_local_settings,
+            // add_project_to_tracking,
+            // validate_project_path,
+            // get_managed_settings,
+            // get_managed_mcp_servers,
+            // NEW: Project-Based Storage Commands
+            read_project_settings,
+            write_project_settings,
+            init_project_claude_dir,
+            read_project_agents,
+            write_project_agent,
+            delete_project_agent,
+            read_project_commands,
+            write_project_command,
+            delete_project_command,
+            read_project_mcp,
+            write_project_mcp,
+            get_project_registry,
+            update_project_registry,
+            delete_project_config
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "macos")]

@@ -54,6 +54,51 @@ export interface CommandFile {
 	exists: boolean;
 }
 
+export interface AgentFile {
+	name: string;
+	content: string;
+	exists: boolean;
+}
+
+// Per-Project Configuration interfaces
+
+// NEW: Project-based storage interfaces
+export interface ProjectSettings {
+	path: string;
+	exists: boolean;
+	settings: unknown | null;
+	hasAgents: boolean;
+	hasCommands: boolean;
+	hasMcp: boolean;
+}
+
+export interface ProjectRegistryEntry {
+	projectPath: string;
+	title: string;
+	lastUsedAt: number;
+	inheritFromGlobal: boolean;
+	parentGlobalConfigId: string | null;
+}
+
+// DEPRECATED: Old centralized storage (kept for backward compatibility)
+export interface ProjectConfigStore {
+	projectPath: string;
+	canonicalPath: string;
+	id: string;
+	title: string;
+	createdAt: number;
+	lastUsedAt: number;
+	settings: unknown;
+	inheritFromGlobal: boolean;
+	parentGlobalConfigId: string | null;
+}
+
+export interface ActiveContext {
+	type: "global" | "project";
+	id: string;
+	projectPath: string | null;
+}
+
 export const useConfigFiles = () => {
 	return useQuery({
 		queryKey: ["config-files"],
@@ -195,6 +240,7 @@ export const useSetUsingConfig = () => {
 			queryClient.invalidateQueries({ queryKey: ["stores"] });
 			queryClient.invalidateQueries({ queryKey: ["current-store"] });
 			queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
 		},
 		onError: (error) => {
 			const errorMessage =
@@ -445,6 +491,32 @@ export const useWriteClaudeMemory = () => {
 	});
 };
 
+// Project Memory Hooks
+export const useProjectMemory = (projectPath: string) => {
+	return useSuspenseQuery({
+		queryKey: ["project-memory", projectPath],
+		queryFn: () => invoke<MemoryFile>("read_project_memory", { projectPath }),
+	});
+};
+
+export const useWriteProjectMemory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({ projectPath, content }: { projectPath: string; content: string }) =>
+			invoke<void>("write_project_memory", { projectPath, content }),
+		onSuccess: (_, variables) => {
+			toast.success("Memory saved successfully");
+			queryClient.invalidateQueries({ queryKey: ["project-memory", variables.projectPath] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(`Failed to save memory: ${errorMessage}`);
+		},
+	});
+};
+
 // Projects management hooks
 
 export interface ProjectConfig {
@@ -616,6 +688,236 @@ export const useDeleteClaudeAgent = () => {
 	});
 };
 
+// Per-Project Configuration hooks
+
+export const useProjectConfigs = () => {
+	return useQuery({
+		queryKey: ["project-configs"],
+		queryFn: () => invoke<ProjectConfigStore[]>("get_project_configs"),
+	});
+};
+
+export const useProjectConfig = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-config", projectPath],
+		queryFn: () =>
+			invoke<ProjectConfigStore | null>("get_project_config", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useCreateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			title,
+			settings,
+			parentGlobalConfigId,
+		}: {
+			projectPath: string;
+			title: string;
+			settings: unknown;
+			parentGlobalConfigId: string | null;
+		}) =>
+			invoke<ProjectConfigStore>("create_project_config", {
+				projectPath,
+				title,
+				settings,
+				parentGlobalConfigId,
+			}),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigCreated"));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigCreateFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useUpdateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			title,
+			settings,
+		}: {
+			projectPath: string;
+			title: string;
+			settings: unknown;
+		}) =>
+			invoke<ProjectConfigStore>("update_project_config", {
+				projectPath,
+				title,
+				settings,
+			}),
+		onSuccess: (data) => {
+			toast.success(i18n.t("toast.projectConfigSaved", { title: data.title }));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-config", data.projectPath],
+			});
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigSaveFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useDeleteProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<void>("delete_project_config", { projectPath }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigDeleted"));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigDeleteFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useActivateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<void>("activate_project_config", { projectPath }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigActivated"));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+			queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigActivateFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useActiveContext = () => {
+	return useQuery({
+		queryKey: ["active-context"],
+		queryFn: () => invoke<ActiveContext | null>("get_active_context"),
+	});
+};
+
+export const useSwitchToGlobalContext = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (storeId: string) =>
+			invoke<void>("switch_to_global_context", { storeId }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.switchedToGlobal"));
+			queryClient.invalidateQueries({ queryKey: ["stores"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+			queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.switchToGlobalFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useAutoCreateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<ProjectConfigStore>("auto_create_project_config", { projectPath }),
+		onSuccess: (data) => {
+			toast.success(
+				i18n.t("toast.projectConfigAutoCreated", { title: data.title }),
+			);
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-config", data.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigAutoCreateFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useActiveMergedConfig = () => {
+	return useQuery({
+		queryKey: ["active-merged-config"],
+		queryFn: () => invoke<unknown>("get_active_merged_config"),
+	});
+};
+
+export const useCheckProjectLocalSettings = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-local-settings", projectPath],
+		queryFn: () =>
+			invoke<unknown | null>("check_project_local_settings", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useImportProjectLocalSettings = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<ProjectConfigStore>("import_project_local_settings", {
+				projectPath,
+			}),
+		onSuccess: (data) => {
+			toast.success(
+				i18n.t("toast.projectConfigImported", { title: data.title }),
+			);
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-config", data.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigImportFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
 // Helper function to rebuild tray menu
 const rebuildTrayMenu = async () => {
 	try {
@@ -623,4 +925,357 @@ const rebuildTrayMenu = async () => {
 	} catch (error) {
 		console.error("Failed to rebuild tray menu:", error);
 	}
+};
+
+// ============================================================================
+// NEW: Project-Based Storage Hooks
+// ============================================================================
+
+// Project Settings Hooks
+export const useProjectSettings = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-settings", projectPath],
+		queryFn: () =>
+			invoke<ProjectSettings>("read_project_settings", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useWriteProjectSettings = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			settings,
+		}: { projectPath: string; settings: unknown }) =>
+			invoke<void>("write_project_settings", { projectPath, settings }),
+		onSuccess: (_, variables) => {
+			toast.success(i18n.t("toast.projectSettingsSaved"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-settings", variables.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.saveFailed", { error: errorMessage }));
+		},
+	});
+};
+
+export const useInitProjectClaudeDir = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<void>("init_project_claude_dir", { projectPath }),
+		onSuccess: (_, projectPath) => {
+			toast.success(i18n.t("toast.projectInitialized"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-settings", projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.initFailed", { error: errorMessage }));
+		},
+	});
+};
+
+// Project Agents Hooks
+export const useProjectAgents = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-agents", projectPath],
+		queryFn: () => invoke<AgentFile[]>("read_project_agents", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useWriteProjectAgent = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			agentName,
+			content,
+		}: { projectPath: string; agentName: string; content: string }) =>
+			invoke<void>("write_project_agent", { projectPath, agentName, content }),
+		onSuccess: (_, variables) => {
+			toast.success(i18n.t("toast.agentSaved"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-agents", variables.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.saveFailed", { error: errorMessage }));
+		},
+	});
+};
+
+export const useDeleteProjectAgent = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			agentName,
+		}: { projectPath: string; agentName: string }) =>
+			invoke<void>("delete_project_agent", { projectPath, agentName }),
+		onSuccess: (_, variables) => {
+			toast.success(i18n.t("toast.agentDeleted"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-agents", variables.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.deleteFailed", { error: errorMessage }));
+		},
+	});
+};
+
+// Project Commands Hooks
+export const useProjectCommands = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-commands", projectPath],
+		queryFn: () =>
+			invoke<CommandFile[]>("read_project_commands", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useWriteProjectCommand = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			commandName,
+			content,
+		}: { projectPath: string; commandName: string; content: string }) =>
+			invoke<void>("write_project_command", {
+				projectPath,
+				commandName,
+				content,
+			}),
+		onSuccess: (_, variables) => {
+			toast.success(i18n.t("toast.commandSaved"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-commands", variables.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.saveFailed", { error: errorMessage }));
+		},
+	});
+};
+
+export const useDeleteProjectCommand = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			commandName,
+		}: { projectPath: string; commandName: string }) =>
+			invoke<void>("delete_project_command", { projectPath, commandName }),
+		onSuccess: (_, variables) => {
+			toast.success(i18n.t("toast.commandDeleted"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-commands", variables.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.deleteFailed", { error: errorMessage }));
+		},
+	});
+};
+
+// Project MCP Hooks
+export const useProjectMcp = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-mcp", projectPath],
+		queryFn: () => invoke<unknown | null>("read_project_mcp", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useWriteProjectMcp = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			content,
+		}: { projectPath: string; content: unknown }) =>
+			invoke<void>("write_project_mcp", { projectPath, content }),
+		onSuccess: (_, variables) => {
+			toast.success(i18n.t("toast.mcpSaved"));
+			queryClient.invalidateQueries({
+				queryKey: ["project-mcp", variables.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.saveFailed", { error: errorMessage }));
+		},
+	});
+};
+
+// Project MCP Servers Hooks (granular per-server operations)
+export const useProjectMcpServers = (projectPath: string) => {
+	return useSuspenseQuery({
+		queryKey: ["project-mcp-servers", projectPath],
+		queryFn: async () => {
+			const mcp = await invoke<Record<string, McpServer> | null>("read_project_mcp", { projectPath });
+			return mcp || {};
+		},
+	});
+};
+
+export const useAddProjectMcpServer = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({
+			projectPath,
+			serverName,
+			serverConfig,
+		}: {
+			projectPath: string;
+			serverName: string;
+			serverConfig: Record<string, any>;
+		}) => {
+			const mcp = await invoke<Record<string, McpServer> | null>("read_project_mcp", { projectPath });
+			const updatedMcp = { ...mcp, [serverName]: serverConfig };
+			await invoke<void>("write_project_mcp", { projectPath, content: updatedMcp });
+		},
+		onSuccess: (_, variables) => {
+			toast.success("MCP server added successfully");
+			queryClient.invalidateQueries({ queryKey: ["project-mcp-servers", variables.projectPath] });
+			queryClient.invalidateQueries({ queryKey: ["project-mcp", variables.projectPath] });
+		},
+		onError: (error) => {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			toast.error(`Failed to add MCP server: ${errorMessage}`);
+		},
+	});
+};
+
+export const useUpdateProjectMcpServer = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({
+			projectPath,
+			serverName,
+			serverConfig,
+		}: {
+			projectPath: string;
+			serverName: string;
+			serverConfig: Record<string, any>;
+		}) => {
+			const mcp = await invoke<Record<string, McpServer> | null>("read_project_mcp", { projectPath });
+			const updatedMcp = { ...mcp, [serverName]: serverConfig };
+			await invoke<void>("write_project_mcp", { projectPath, content: updatedMcp });
+		},
+		onSuccess: (_, variables) => {
+			toast.success("MCP server updated successfully");
+			queryClient.invalidateQueries({ queryKey: ["project-mcp-servers", variables.projectPath] });
+			queryClient.invalidateQueries({ queryKey: ["project-mcp", variables.projectPath] });
+		},
+		onError: (error) => {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			toast.error(`Failed to update MCP server: ${errorMessage}`);
+		},
+	});
+};
+
+export const useDeleteProjectMcpServer = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({
+			projectPath,
+			serverName,
+		}: {
+			projectPath: string;
+			serverName: string;
+		}) => {
+			const mcp = await invoke<Record<string, McpServer> | null>("read_project_mcp", { projectPath });
+			if (!mcp) return;
+			const { [serverName]: _, ...updatedMcp } = mcp;
+			await invoke<void>("write_project_mcp", { projectPath, content: updatedMcp });
+		},
+		onSuccess: (_, variables) => {
+			toast.success("MCP server deleted successfully");
+			queryClient.invalidateQueries({ queryKey: ["project-mcp-servers", variables.projectPath] });
+			queryClient.invalidateQueries({ queryKey: ["project-mcp", variables.projectPath] });
+		},
+		onError: (error) => {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			toast.error(`Failed to delete MCP server: ${errorMessage}`);
+		},
+	});
+};
+
+// Project Registry Hooks
+export const useProjectRegistry = () => {
+	return useQuery({
+		queryKey: ["project-registry"],
+		queryFn: () => invoke<ProjectRegistryEntry[]>("get_project_registry"),
+	});
+};
+
+export const useUpdateProjectRegistry = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			title,
+			inheritFromGlobal,
+			parentGlobalConfigId,
+		}: {
+			projectPath: string;
+			title: string;
+			inheritFromGlobal: boolean;
+			parentGlobalConfigId: string | null;
+		}) =>
+			invoke<void>("update_project_registry", {
+				projectPath,
+				title,
+				inheritFromGlobal,
+				parentGlobalConfigId,
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["project-registry"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.updateFailed", { error: errorMessage }));
+		},
+	});
+};
+
+export const useDeleteProject = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<void>("delete_project_config", { projectPath }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigDeleted"));
+			queryClient.invalidateQueries({ queryKey: ["project-registry"] });
+			queryClient.invalidateQueries({ queryKey: ["claude-projects"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(i18n.t("toast.projectConfigDeleteFailed", { error: errorMessage }));
+		},
+	});
 };

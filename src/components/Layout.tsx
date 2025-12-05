@@ -28,6 +28,11 @@ export function Layout() {
 			label: t("navigation.configurations"),
 		},
 		{
+			to: "/project-configs",
+			icon: FolderIcon,
+			label: t("navigation.projectConfigs"),
+		},
+		{
 			to: "/projects",
 			icon: FolderIcon,
 			label: t("navigation.projects"),

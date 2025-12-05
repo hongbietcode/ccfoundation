@@ -1,6 +1,6 @@
-# Contributing to CC Mate
+# Contributing to CC Foundation
 
-Thank you for your interest in contributing to CC Mate! This guide will help you get started with development, building, and contributing to the project.
+Thank you for your interest in contributing to CC Foundation! This guide will help you get started with development, building, and contributing to the project.
 
 ## 🛠️ Development Setup
 
@@ -8,9 +8,9 @@ Thank you for your interest in contributing to CC Mate! This guide will help you
 
 Before you start, ensure you have the following installed:
 
-- **Node.js** 18+ with **pnpm** (required package manager)
-- **Rust** 1.70+ and **Cargo**
-- **Tauri CLI** dependencies for your platform
+-   **Node.js** 18+ with **pnpm** (required package manager)
+-   **Rust** 1.70+ and **Cargo**
+-   **Tauri CLI** dependencies for your platform
 
 #### Installing pnpm
 
@@ -84,10 +84,10 @@ git checkout -b fix/your-bug-fix
 
 ### 2. Make Your Changes
 
-- Follow the code style guidelines
-- Add comments for complex logic
-- Update documentation if needed
-- Test your changes thoroughly
+-   Follow the code style guidelines
+-   Add comments for complex logic
+-   Update documentation if needed
+-   Test your changes thoroughly
 
 ### 3. Quality Checks
 
@@ -112,55 +112,56 @@ git commit -m "fix: resolve your bug description"
 ```
 
 Use conventional commit messages:
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation changes
-- `style:` for code formatting changes
-- `refactor:` for code refactoring
-- `test:` for adding tests
-- `chore:` for maintenance tasks
+
+-   `feat:` for new features
+-   `fix:` for bug fixes
+-   `docs:` for documentation changes
+-   `style:` for code formatting changes
+-   `refactor:` for code refactoring
+-   `test:` for adding tests
+-   `chore:` for maintenance tasks
 
 ### 5. Submit a Pull Request
 
-- Push your branch to GitHub
-- Create a pull request with a clear description
-- Link any relevant issues
-- Wait for code review
+-   Push your branch to GitHub
+-   Create a pull request with a clear description
+-   Link any relevant issues
+-   Wait for code review
 
 ## 🐛 Bug Reports
 
 When reporting bugs, please include:
 
-- **OS and version**
-- **CC Mate version**
-- **Steps to reproduce**
-- **Expected behavior**
-- **Actual behavior**
-- **Relevant logs or screenshots**
+-   **OS and version**
+-   **CC Foundation version**
+-   **Steps to reproduce**
+-   **Expected behavior**
+-   **Actual behavior**
+-   **Relevant logs or screenshots**
 
 ## 💡 Feature Requests
 
 When requesting features:
 
-- **Use case**: What problem does this solve?
-- **Proposed solution**: How should it work?
-- **Alternatives considered**: What other approaches did you think about?
-- **Additional context**: Any other relevant information
+-   **Use case**: What problem does this solve?
+-   **Proposed solution**: How should it work?
+-   **Alternatives considered**: What other approaches did you think about?
+-   **Additional context**: Any other relevant information
 
 ## 🤝 Getting Help
 
-- **GitHub Issues**: For bug reports and feature requests
-- **GitHub Discussions**: For questions and community discussion
-- **Documentation**: Check existing docs first
+-   **GitHub Issues**: For bug reports and feature requests
+-   **GitHub Discussions**: For questions and community discussion
+-   **Documentation**: Check existing docs first
 
 ## 📋 Code Review Process
 
 All contributions go through code review to ensure:
 
-- Code quality and maintainability
-- Adherence to project guidelines
-- Proper testing and documentation
-- Security considerations
+-   Code quality and maintainability
+-   Adherence to project guidelines
+-   Proper testing and documentation
+-   Security considerations
 
 Check the [GitHub Issues](https://github.com/djyde/ccconfig/issues) for specific items that need help.
 
@@ -168,11 +169,11 @@ Check the [GitHub Issues](https://github.com/djyde/ccconfig/issues) for specific
 
 Contributors are recognized in:
 
-- Release notes for significant contributions
-- README contributors section (for substantial contributions)
-- GitHub contributor statistics
+-   Release notes for significant contributions
+-   README contributors section (for substantial contributions)
+-   GitHub contributor statistics
 
-Thank you for contributing to CC Mate! 🎉
+Thank you for contributing to CC Foundation! 🎉
 
 ---
 

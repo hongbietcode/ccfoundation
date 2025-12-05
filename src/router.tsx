@@ -1,25 +1,31 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import { Layout } from "./components/Layout";
+import { ContextLayout } from "./components/ContextLayout";
 import { RouteWrapper } from "./components/RouteWrapper";
 import { AgentsPage } from "./pages/AgentsPage";
 import { CommandsPage } from "./pages/CommandsPage";
 import { ConfigEditorPage } from "./pages/ConfigEditorPage";
 import { ConfigSwitcherPage } from "./pages/ConfigSwitcherPage";
+import { ContextSelectorPage } from "./pages/ContextSelectorPage";
 import { MCPPage } from "./pages/MCPPage";
 import { MemoryPage } from "./pages/MemoryPage";
-import { NotificationPage } from "./pages/NotificationPage";
-import { Detail } from "./pages/projects/Detail";
-import { ProjectsLayout } from "./pages/projects/Layout";
-import { List } from "./pages/projects/List";
-import { SettingsPage } from "./pages/SettingsPage";
 import { UsagePage } from "./pages/UsagePage";
 
 const router = createBrowserRouter([
+	// Root: Context Selector (chọn Global hoặc Project)
 	{
 		path: "/",
 		element: (
 			<RouteWrapper>
-				<Layout />
+				<ContextSelectorPage />
+			</RouteWrapper>
+		),
+	},
+	// Context-based routes (Global hoặc Project)
+	{
+		path: "/context/:contextType",
+		element: (
+			<RouteWrapper>
+				<ContextLayout />
 			</RouteWrapper>
 		),
 		children: [
@@ -36,14 +42,6 @@ const router = createBrowserRouter([
 				element: (
 					<RouteWrapper>
 						<ConfigEditorPage />
-					</RouteWrapper>
-				),
-			},
-			{
-				path: "settings",
-				element: (
-					<RouteWrapper>
-						<SettingsPage />
 					</RouteWrapper>
 				),
 			},
@@ -80,10 +78,61 @@ const router = createBrowserRouter([
 				),
 			},
 			{
-				path: "notification",
+				path: "commands",
 				element: (
 					<RouteWrapper>
-						<NotificationPage />
+						<CommandsPage />
+					</RouteWrapper>
+				),
+			},
+		],
+	},
+	// Project context routes (thêm projectPath vào URL)
+	{
+		path: "/context/project/:projectPath",
+		element: (
+			<RouteWrapper>
+				<ContextLayout />
+			</RouteWrapper>
+		),
+		children: [
+			{
+				index: true,
+				element: (
+					<RouteWrapper>
+						<ConfigSwitcherPage />
+					</RouteWrapper>
+				),
+			},
+			{
+				path: "edit/:storeId",
+				element: (
+					<RouteWrapper>
+						<ConfigEditorPage />
+					</RouteWrapper>
+				),
+			},
+			{
+				path: "mcp",
+				element: (
+					<RouteWrapper>
+						<MCPPage />
+					</RouteWrapper>
+				),
+			},
+			{
+				path: "agents",
+				element: (
+					<RouteWrapper>
+						<AgentsPage />
+					</RouteWrapper>
+				),
+			},
+			{
+				path: "memory",
+				element: (
+					<RouteWrapper>
+						<MemoryPage />
 					</RouteWrapper>
 				),
 			},
@@ -94,32 +143,6 @@ const router = createBrowserRouter([
 						<CommandsPage />
 					</RouteWrapper>
 				),
-			},
-			{
-				path: "projects",
-				element: (
-					<RouteWrapper>
-						<ProjectsLayout />
-					</RouteWrapper>
-				),
-				children: [
-					{
-						index: true,
-						element: (
-							<RouteWrapper>
-								<List />
-							</RouteWrapper>
-						),
-					},
-					{
-						path: ":path",
-						element: (
-							<RouteWrapper>
-								<Detail />
-							</RouteWrapper>
-						),
-					},
-				],
 			},
 		],
 	},
