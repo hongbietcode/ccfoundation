@@ -28,20 +28,48 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 import { builtInMcpServers } from "@/lib/builtInMCP";
+import { useConfigContext } from "@/contexts/ConfigContext";
 import {
 	type McpServer,
 	useAddGlobalMcpServer,
+	useAddProjectMcpServer,
 	useDeleteGlobalMcpServer,
+	useDeleteProjectMcpServer,
 	useGlobalMcpServers,
+	useProjectMcpServers,
 	useUpdateGlobalMcpServer,
+	useUpdateProjectMcpServer,
 } from "@/lib/query";
 import { useCodeMirrorTheme } from "@/lib/use-codemirror-theme";
 
 function MCPPageContent() {
 	const { t } = useTranslation();
-	const { data: mcpServers } = useGlobalMcpServers();
-	const updateMcpServer = useUpdateGlobalMcpServer();
-	const deleteMcpServer = useDeleteGlobalMcpServer();
+	const { isProject, projectPath } = useConfigContext();
+
+	// Always call both hooks (React rules), choose which data to use
+	const { data: globalMcpServers } = useGlobalMcpServers();
+	const { data: projectMcpServers } = useProjectMcpServers(projectPath || "");
+	const mcpServers = isProject && projectPath ? projectMcpServers : globalMcpServers;
+
+	const updateGlobalMcpServer = useUpdateGlobalMcpServer();
+	const updateProjectMcpServer = useUpdateProjectMcpServer();
+	const updateMcpServer = isProject
+		? {
+				mutate: (params: { serverName: string; serverConfig: Record<string, any> }) =>
+					updateProjectMcpServer.mutate({ projectPath: projectPath!, ...params }),
+				isPending: updateProjectMcpServer.isPending,
+		  }
+		: updateGlobalMcpServer;
+
+	const deleteGlobalMcpServer = useDeleteGlobalMcpServer();
+	const deleteProjectMcpServer = useDeleteProjectMcpServer();
+	const deleteMcpServer = isProject
+		? {
+				mutate: (serverName: string) =>
+					deleteProjectMcpServer.mutate({ projectPath: projectPath!, serverName }),
+				isPending: deleteProjectMcpServer.isPending,
+		  }
+		: deleteGlobalMcpServer;
 	const [serverConfigs, setServerConfigs] = useState<Record<string, string>>(
 		{},
 	);
@@ -124,7 +152,11 @@ function MCPPageContent() {
 							</DialogDescription>
 						</DialogHeader>
 						<div className="py-3 mt-3">
-							<MCPCreatePanel onClose={() => setIsDialogOpen(false)} />
+							<MCPCreatePanel
+								onClose={() => setIsDialogOpen(false)}
+								isProject={isProject}
+								projectPath={projectPath}
+							/>
 						</div>
 						{/* <div className="flex justify-end">
               <Button
@@ -220,7 +252,15 @@ export function MCPPage() {
 	);
 }
 
-function MCPCreatePanel({ onClose }: { onClose?: () => void }) {
+function MCPCreatePanel({
+	onClose,
+	isProject,
+	projectPath,
+}: {
+	onClose?: () => void;
+	isProject: boolean;
+	projectPath?: string;
+}) {
 	const { t } = useTranslation();
 	const [currentTab, setCurrentTab] = useState<"recommend" | "manual">(
 		"recommend",
@@ -249,20 +289,56 @@ function MCPCreatePanel({ onClose }: { onClose?: () => void }) {
 
 			{match(currentTab)
 				.with("recommend", () => {
-					return <RecommendMCPPanel onClose={onClose} />;
+					return (
+						<RecommendMCPPanel
+							onClose={onClose}
+							isProject={isProject}
+							projectPath={projectPath}
+						/>
+					);
 				})
 				.with("manual", () => {
-					return <CustomMCPPanel onClose={onClose} />;
+					return (
+						<CustomMCPPanel
+							onClose={onClose}
+							isProject={isProject}
+							projectPath={projectPath}
+						/>
+					);
 				})
 				.exhaustive()}
 		</div>
 	);
 }
 
-function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
+function RecommendMCPPanel({
+	onClose,
+	isProject,
+	projectPath,
+}: {
+	onClose?: () => void;
+	isProject: boolean;
+	projectPath?: string;
+}) {
 	const { t } = useTranslation();
-	const addMcpServer = useAddGlobalMcpServer();
-	const { data: mcpServers } = useGlobalMcpServers();
+	const addGlobalMcpServer = useAddGlobalMcpServer();
+	const addProjectMcpServer = useAddProjectMcpServer();
+	const { data: globalMcpServers } = useGlobalMcpServers();
+	const { data: projectMcpServers } = useProjectMcpServers(projectPath || "");
+
+	const mcpServers = isProject && projectPath ? projectMcpServers : globalMcpServers;
+	const addMcpServer = isProject
+		? {
+				mutate: (
+					params: { serverName: string; serverConfig: Record<string, any> },
+					options?: { onSuccess?: () => void },
+				) =>
+					addProjectMcpServer.mutate(
+						{ projectPath: projectPath!, ...params },
+						options,
+					),
+		  }
+		: addGlobalMcpServer;
 
 	const handleAddMcpServer = async (
 		mcpServer: (typeof builtInMcpServers)[0],
@@ -352,12 +428,30 @@ function RecommendMCPPanel({ onClose }: { onClose?: () => void }) {
 	);
 }
 
-function CustomMCPPanel({ onClose }: { onClose?: () => void }) {
+function CustomMCPPanel({
+	onClose,
+	isProject,
+	projectPath,
+}: {
+	onClose?: () => void;
+	isProject: boolean;
+	projectPath?: string;
+}) {
 	const { t } = useTranslation();
 	const [customConfig, setCustomConfig] = useState("");
-	const addMcpServer = useAddGlobalMcpServer();
-	const { data: mcpServers } = useGlobalMcpServers();
+	const addGlobalMcpServer = useAddGlobalMcpServer();
+	const addProjectMcpServer = useAddProjectMcpServer();
+	const { data: globalMcpServers } = useGlobalMcpServers();
+	const { data: projectMcpServers } = useProjectMcpServers(projectPath || "");
 	const codeMirrorTheme = useCodeMirrorTheme();
+
+	const mcpServers = isProject && projectPath ? projectMcpServers : globalMcpServers;
+	const addMcpServer = isProject
+		? {
+				mutate: (params: { serverName: string; serverConfig: Record<string, any> }) =>
+					addProjectMcpServer.mutate({ projectPath: projectPath!, ...params }),
+		  }
+		: addGlobalMcpServer;
 
 	const handleAddCustomMcpServer = async () => {
 		try {

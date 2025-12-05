@@ -23,18 +23,47 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useConfigContext } from "@/contexts/ConfigContext";
 import {
 	useClaudeCommands,
 	useDeleteClaudeCommand,
+	useDeleteProjectCommand,
+	useProjectCommands,
 	useWriteClaudeCommand,
+	useWriteProjectCommand,
 } from "@/lib/query";
 import { useCodeMirrorTheme } from "@/lib/use-codemirror-theme";
 
 function CommandsPageContent() {
 	const { t } = useTranslation();
-	const { data: commands, isLoading, error } = useClaudeCommands();
-	const writeCommand = useWriteClaudeCommand();
-	const deleteCommand = useDeleteClaudeCommand();
+	const { isProject, projectPath } = useConfigContext();
+
+	// Always call both hooks (React rules), choose which data to use
+	const { data: globalCommands, isLoading: globalLoading, error: globalError } = useClaudeCommands();
+	const { data: projectCommands, isLoading: projectLoading, error: projectError } = useProjectCommands(projectPath || "");
+	const commands = isProject && projectPath ? projectCommands : globalCommands;
+	const isLoading = isProject && projectPath ? projectLoading : globalLoading;
+	const error = isProject && projectPath ? projectError : globalError;
+
+	const writeGlobalCommand = useWriteClaudeCommand();
+	const writeProjectCommand = useWriteProjectCommand();
+	const writeCommand = isProject && projectPath
+		? {
+				mutate: (params: { commandName: string; content: string }) =>
+					writeProjectCommand.mutate({ projectPath, ...params }),
+				isPending: writeProjectCommand.isPending,
+		  }
+		: writeGlobalCommand;
+
+	const deleteGlobalCommand = useDeleteClaudeCommand();
+	const deleteProjectCommand = useDeleteProjectCommand();
+	const deleteCommand = isProject && projectPath
+		? {
+				mutate: (commandName: string) =>
+					deleteProjectCommand.mutate({ projectPath, commandName }),
+				isPending: deleteProjectCommand.isPending,
+		  }
+		: deleteGlobalCommand;
 	const [commandEdits, setCommandEdits] = useState<Record<string, string>>({});
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const codeMirrorTheme = useCodeMirrorTheme();
@@ -115,7 +144,11 @@ function CommandsPageContent() {
 								{t("commands.addCommandDescription")}
 							</DialogDescription>
 						</DialogHeader>
-						<CreateCommandPanel onClose={() => setIsDialogOpen(false)} />
+						<CreateCommandPanel
+							onClose={() => setIsDialogOpen(false)}
+							isProject={isProject}
+							projectPath={projectPath}
+						/>
 					</DialogContent>
 				</Dialog>
 			</div>
@@ -139,7 +172,9 @@ function CommandsPageContent() {
 												<TerminalIcon size={12} />
 												<span className="font-medium">{command.name}</span>
 												<span className="text-sm text-muted-foreground font-normal">
-													{`~/.claude/commands/${command.name}.md`}
+													{isProject && projectPath
+														? `${projectPath}/.claude/commands/${command.name}.md`
+														: `~/.claude/commands/${command.name}.md`}
 												</span>
 											</div>
 										</AccordionTrigger>
@@ -236,12 +271,33 @@ export function CommandsPage() {
 	);
 }
 
-function CreateCommandPanel({ onClose }: { onClose?: () => void }) {
+function CreateCommandPanel({
+	onClose,
+	isProject,
+	projectPath,
+}: {
+	onClose?: () => void;
+	isProject: boolean;
+	projectPath?: string;
+}) {
 	const { t } = useTranslation();
 	const [commandName, setCommandName] = useState("");
 	const [commandContent, setCommandContent] = useState("");
-	const writeCommand = useWriteClaudeCommand();
-	const { data: commands } = useClaudeCommands();
+	const writeGlobalCommand = useWriteClaudeCommand();
+	const writeProjectCommand = useWriteProjectCommand();
+	const writeCommand = isProject && projectPath
+		? {
+				mutate: (
+					params: { commandName: string; content: string },
+					options?: { onSuccess?: () => void },
+				) => writeProjectCommand.mutate({ projectPath, ...params }, options),
+				isPending: writeProjectCommand.isPending,
+		  }
+		: writeGlobalCommand;
+
+	const { data: globalCommands } = useClaudeCommands();
+	const { data: projectCommands } = useProjectCommands(projectPath || "");
+	const commands = isProject && projectPath ? projectCommands : globalCommands;
 	const codeMirrorTheme = useCodeMirrorTheme();
 
 	const handleCreateCommand = async () => {

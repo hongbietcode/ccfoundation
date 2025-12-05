@@ -2,6 +2,7 @@ import { Kimi, Minimax, ZAI } from "@lobehub/icons";
 import { EllipsisVerticalIcon, PencilLineIcon, PlusIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { useConfigContext } from "@/contexts/ConfigContext";
 import { GLMDialog } from "@/components/GLMBanner";
 import { KimiDialog } from "@/components/KimiDialog";
 import { MiniMaxDialog } from "@/components/MiniMaxDialog";
@@ -20,8 +21,17 @@ import {
 	useSetCurrentConfig,
 	useStores,
 } from "../lib/query";
+import { ProjectConfigEditor } from "./ProjectConfigEditor";
 
 export function ConfigSwitcherPage() {
+	const { isProject, projectPath } = useConfigContext();
+
+	// If project context, show project config editor instead
+	if (isProject && projectPath) {
+		return <ProjectConfigEditor />;
+	}
+
+	// Global context: show config stores
 	return (
 		<div className="">
 			<section>
@@ -59,7 +69,7 @@ function ConfigStores() {
 			title: t("configSwitcher.newConfig"),
 			settings: {},
 		});
-		navigate(`/edit/${store.id}`);
+		navigate(`/context/global/edit/${store.id}`);
 	};
 
 	if (stores.length === 0) {
@@ -129,7 +139,7 @@ function ConfigStores() {
 			>
 				<div data-tauri-drag-region>
 					<h3 className="font-bold" data-tauri-drag-region>
-						{t("configSwitcher.title")}
+						Global Configs
 					</h3>
 					<p className="text-sm text-muted-foreground" data-tauri-drag-region>
 						{t("configSwitcher.description")}
@@ -238,7 +248,7 @@ function ConfigStores() {
 									className="hover:bg-primary/10 rounded-lg p-2 hover:text-primary"
 									onClick={(e) => {
 										e.stopPropagation();
-										navigate(`/edit/${store.id}`);
+										navigate(`/context/global/edit/${store.id}`);
 									}}
 								>
 									<PencilLineIcon className="text-muted-foreground" size={14} />

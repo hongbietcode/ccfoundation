@@ -194,6 +194,8 @@ pub fn run() {
             read_project_usage_files,
             read_claude_memory,
             write_claude_memory,
+            read_project_memory,
+            write_project_memory,
             track,
             get_notification_settings,
             update_notification_settings,
@@ -206,24 +208,38 @@ pub fn run() {
             read_claude_agents,
             write_claude_agent,
             delete_claude_agent,
-            // Per-project configuration commands (Phase 1)
-            get_project_configs,
-            get_project_config,
-            create_project_config,
-            update_project_config,
-            delete_project_config,
+            // Per-project configuration commands
+            // OLD centralized storage commands - KEPT for backward compatibility only
+            // get_project_configs,
+            // get_project_config,
+            // create_project_config,
+            // update_project_config,
+            // delete_project_config,
+            // update_project_config_path,
+
+            // KEPT - Still needed
             activate_project_config,
             get_active_context,
             switch_to_global_context,
-            auto_create_project_config,
-            get_active_merged_config,
             check_project_local_settings,
-            import_project_local_settings,
-            update_project_config_path,
             add_project_to_tracking,
             validate_project_path,
             get_managed_settings,
-            get_managed_mcp_servers
+            get_managed_mcp_servers,
+            // NEW: Project-Based Storage Commands
+            read_project_settings,
+            write_project_settings,
+            init_project_claude_dir,
+            read_project_agents,
+            write_project_agent,
+            delete_project_agent,
+            read_project_commands,
+            write_project_command,
+            delete_project_command,
+            read_project_mcp,
+            write_project_mcp,
+            get_project_registry,
+            update_project_registry
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "macos")]

@@ -1257,6 +1257,43 @@ pub async fn write_claude_memory(content: String) -> Result<(), String> {
     Ok(())
 }
 
+// Project Memory Commands
+#[tauri::command]
+pub async fn read_project_memory(project_path: String) -> Result<MemoryFile, String> {
+    // Primary location: ./CLAUDE.md at project root
+    let claude_md_path = PathBuf::from(&project_path).join("CLAUDE.md");
+
+    let path_str = claude_md_path.to_string_lossy().to_string();
+
+    if claude_md_path.exists() {
+        let content = std::fs::read_to_string(&claude_md_path)
+            .map_err(|e| format!("Failed to read CLAUDE.md file: {}", e))?;
+
+        Ok(MemoryFile {
+            path: path_str,
+            content,
+            exists: true,
+        })
+    } else {
+        Ok(MemoryFile {
+            path: path_str,
+            content: String::new(),
+            exists: false,
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn write_project_memory(project_path: String, content: String) -> Result<(), String> {
+    // Primary location: ./CLAUDE.md at project root
+    let claude_md_path = PathBuf::from(&project_path).join("CLAUDE.md");
+
+    std::fs::write(&claude_md_path, content)
+        .map_err(|e| format!("Failed to write CLAUDE.md file: {}", e))?;
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn install_and_restart(app: tauri::AppHandle) -> Result<(), String> {
     println!("🚀 Starting update installation process...");
@@ -2142,10 +2179,38 @@ pub async fn delete_claude_agent(agent_name: String) -> Result<(), String> {
 }
 
 // ============================================================================
-// Per-Project Configuration - Phase 1: Backend Foundation
+// Per-Project Configuration - Refactored to Project-Based Storage
 // ============================================================================
 
-/// Project configuration store - represents a project-specific config
+/// Project settings - represents settings stored in PROJECT/.claude/settings.json
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ProjectSettings {
+    pub path: String,
+    pub exists: bool,
+    pub settings: Option<Value>,
+    #[serde(rename = "hasAgents")]
+    pub has_agents: bool,
+    #[serde(rename = "hasCommands")]
+    pub has_commands: bool,
+    #[serde(rename = "hasMcp")]
+    pub has_mcp: bool,
+}
+
+/// Project registry entry - lightweight tracking in ~/.ccconfig/project-registry.json
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ProjectRegistryEntry {
+    #[serde(rename = "projectPath")]
+    pub project_path: String,
+    pub title: String,
+    #[serde(rename = "lastUsedAt")]
+    pub last_used_at: u64,
+    #[serde(rename = "inheritFromGlobal")]
+    pub inherit_from_global: bool,
+    #[serde(rename = "parentGlobalConfigId")]
+    pub parent_global_config_id: Option<String>,
+}
+
+/// DEPRECATED: Old centralized storage structure (kept for migration)
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ProjectConfigStore {
     #[serde(rename = "projectPath")]
@@ -2246,6 +2311,81 @@ fn write_project_config_file(config: &ProjectConfigStore) -> Result<(), String> 
 
     std::fs::write(&config_file, json_content)
         .map_err(|e| format!("Failed to write project config: {}", e))?;
+
+    Ok(())
+}
+
+// ============================================================================
+// NEW: Project-Based Storage Helper Functions
+// ============================================================================
+
+/// Get project's .claude directory path
+fn get_project_claude_dir(project_path: &str) -> PathBuf {
+    PathBuf::from(project_path).join(".claude")
+}
+
+/// Get project's settings.json path
+fn get_project_settings_path(project_path: &str) -> PathBuf {
+    get_project_claude_dir(project_path).join("settings.json")
+}
+
+/// Get project's agents directory path
+fn get_project_agents_dir(project_path: &str) -> PathBuf {
+    get_project_claude_dir(project_path).join("agents")
+}
+
+/// Get project's commands directory path
+fn get_project_commands_dir(project_path: &str) -> PathBuf {
+    get_project_claude_dir(project_path).join("commands")
+}
+
+/// Get project's .mcp.json path
+fn get_project_mcp_path(project_path: &str) -> PathBuf {
+    PathBuf::from(project_path).join(".mcp.json")
+}
+
+/// Get project registry file path
+fn get_project_registry_path() -> Result<PathBuf, String> {
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    Ok(home_dir.join(APP_CONFIG_DIR).join("project-registry.json"))
+}
+
+/// Read project registry
+fn read_project_registry() -> Result<std::collections::HashMap<String, ProjectRegistryEntry>, String> {
+    let registry_path = get_project_registry_path()?;
+
+    if !registry_path.exists() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let content = std::fs::read_to_string(&registry_path)
+        .map_err(|e| format!("Failed to read project registry: {}", e))?;
+
+    let registry: std::collections::HashMap<String, ProjectRegistryEntry> =
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse project registry: {}", e))?;
+
+    Ok(registry)
+}
+
+/// Write project registry entry
+fn write_project_registry_entry(path: &str, entry: &ProjectRegistryEntry) -> Result<(), String> {
+    let registry_path = get_project_registry_path()?;
+
+    // Ensure parent directory exists
+    if let Some(parent) = registry_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create registry directory: {}", e))?;
+    }
+
+    let mut registry = read_project_registry()?;
+    registry.insert(path.to_string(), entry.clone());
+
+    let json_content = serde_json::to_string_pretty(&registry)
+        .map_err(|e| format!("Failed to serialize registry: {}", e))?;
+
+    std::fs::write(&registry_path, json_content)
+        .map_err(|e| format!("Failed to write registry: {}", e))?;
 
     Ok(())
 }
@@ -2613,39 +2753,58 @@ pub async fn delete_project_config(project_path: String) -> Result<(), String> {
 /// 6. Activate project config (switch context)
 #[tauri::command]
 pub async fn activate_project_config(project_path: String) -> Result<(), String> {
-    let config = read_project_config_file(&project_path)?.ok_or("Project config not found")?;
+    // Read settings from PROJECT/.claude/settings.json
+    let settings_path = get_project_settings_path(&project_path);
 
-    // Update last_used_at
-    let mut updated_config = config.clone();
-    updated_config.last_used_at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| format!("Failed to get timestamp: {}", e))?
-        .as_secs();
-    write_project_config_file(&updated_config)?;
+    if !settings_path.exists() {
+        return Err("Project .claude/settings.json not found".to_string());
+    }
 
-    // Get merged settings
-    let final_settings = if config.inherit_from_global {
-        if let Some(parent_id) = &config.parent_global_config_id {
-            let stores = get_stores().await?;
-            if let Some(parent) = stores.into_iter().find(|s| &s.id == parent_id) {
-                merge_settings(&parent.settings, &config.settings)
+    let content = std::fs::read_to_string(&settings_path)
+        .map_err(|e| format!("Failed to read project settings: {}", e))?;
+    let project_settings: Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse project settings: {}", e))?;
+
+    // Check registry for inheritance settings
+    let registry = read_project_registry()?;
+    let registry_entry = registry.get(&project_path);
+
+    // Get merged settings if inheriting from global
+    let final_settings = if let Some(entry) = registry_entry {
+        if entry.inherit_from_global {
+            if let Some(parent_id) = &entry.parent_global_config_id {
+                let stores = get_stores().await?;
+                if let Some(parent) = stores.into_iter().find(|s| &s.id == parent_id) {
+                    merge_settings(&parent.settings, &project_settings)
+                } else {
+                    project_settings.clone()
+                }
             } else {
-                config.settings.clone()
+                project_settings.clone()
             }
         } else {
-            config.settings.clone()
+            project_settings.clone()
         }
     } else {
-        config.settings.clone()
+        project_settings.clone()
     };
 
-    // Apply merged config to settings.json
+    // Update last_used_at in registry
+    if let Some(mut entry) = registry_entry.cloned() {
+        entry.last_used_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| format!("Failed to get timestamp: {}", e))?
+            .as_secs();
+        write_project_registry_entry(&project_path, &entry)?;
+    }
+
+    // Apply merged config to ~/.claude/settings.json
     apply_config_to_settings(&final_settings).await?;
 
     // Update active context
     let active_ctx = ActiveContext {
         context_type: "project".to_string(),
-        id: config.id.clone(),
+        id: project_path.clone(), // Use project path as ID
         project_path: Some(project_path),
     };
     write_active_context(Some(active_ctx))?;
@@ -2919,4 +3078,307 @@ pub async fn get_managed_mcp_servers() -> Result<Option<Value>, String> {
         }
     }
     Ok(None)
+}
+
+// ============================================================================
+// NEW: Project-Based Storage Commands
+// ============================================================================
+
+/// Read project settings from PROJECT/.claude/settings.json
+#[tauri::command]
+pub async fn read_project_settings(project_path: String) -> Result<ProjectSettings, String> {
+    let claude_dir = get_project_claude_dir(&project_path);
+    let settings_path = get_project_settings_path(&project_path);
+    let agents_dir = get_project_agents_dir(&project_path);
+    let commands_dir = get_project_commands_dir(&project_path);
+    let mcp_path = get_project_mcp_path(&project_path);
+
+    let exists = claude_dir.exists();
+    let settings = if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read project settings: {}", e))?;
+        let json: Value = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse project settings: {}", e))?;
+        Some(json)
+    } else {
+        None
+    };
+
+    Ok(ProjectSettings {
+        path: project_path,
+        exists,
+        settings,
+        has_agents: agents_dir.exists() && agents_dir.is_dir(),
+        has_commands: commands_dir.exists() && commands_dir.is_dir(),
+        has_mcp: mcp_path.exists(),
+    })
+}
+
+/// Write project settings to PROJECT/.claude/settings.json
+#[tauri::command]
+pub async fn write_project_settings(project_path: String, settings: Value) -> Result<(), String> {
+    let settings_path = get_project_settings_path(&project_path);
+
+    // Ensure .claude directory exists
+    if let Some(parent) = settings_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create .claude directory: {}", e))?;
+    }
+
+    let json_content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    std::fs::write(&settings_path, json_content)
+        .map_err(|e| format!("Failed to write settings: {}", e))?;
+
+    Ok(())
+}
+
+/// Initialize PROJECT/.claude/ directory structure
+#[tauri::command]
+pub async fn init_project_claude_dir(project_path: String) -> Result<(), String> {
+    let claude_dir = get_project_claude_dir(&project_path);
+    let agents_dir = get_project_agents_dir(&project_path);
+    let commands_dir = get_project_commands_dir(&project_path);
+
+    std::fs::create_dir_all(&claude_dir)
+        .map_err(|e| format!("Failed to create .claude directory: {}", e))?;
+    std::fs::create_dir_all(&agents_dir)
+        .map_err(|e| format!("Failed to create agents directory: {}", e))?;
+    std::fs::create_dir_all(&commands_dir)
+        .map_err(|e| format!("Failed to create commands directory: {}", e))?;
+
+    // Create default settings.json if it doesn't exist
+    let settings_path = get_project_settings_path(&project_path);
+    if !settings_path.exists() {
+        let default_settings = serde_json::json!({
+            "model": "claude-sonnet-4",
+            "env": {},
+            "permissions": {
+                "allow": [],
+                "deny": []
+            }
+        });
+        let json_content = serde_json::to_string_pretty(&default_settings)
+            .map_err(|e| format!("Failed to serialize default settings: {}", e))?;
+        std::fs::write(&settings_path, json_content)
+            .map_err(|e| format!("Failed to write default settings: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Read project agents from PROJECT/.claude/agents/
+#[tauri::command]
+pub async fn read_project_agents(project_path: String) -> Result<Vec<AgentFile>, String> {
+    let agents_dir = get_project_agents_dir(&project_path);
+
+    if !agents_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut agent_files = Vec::new();
+
+    let entries = std::fs::read_dir(&agents_dir)
+        .map_err(|e| format!("Failed to read agents directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
+            let file_name = path
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read agent file {}: {}", path.display(), e))?;
+
+            agent_files.push(AgentFile {
+                name: file_name,
+                content,
+                exists: true,
+            });
+        }
+    }
+
+    agent_files.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(agent_files)
+}
+
+/// Write project agent to PROJECT/.claude/agents/{name}.md
+#[tauri::command]
+pub async fn write_project_agent(
+    project_path: String,
+    agent_name: String,
+    content: String,
+) -> Result<(), String> {
+    let agents_dir = get_project_agents_dir(&project_path);
+
+    // Ensure directory exists
+    std::fs::create_dir_all(&agents_dir)
+        .map_err(|e| format!("Failed to create agents directory: {}", e))?;
+
+    let file_path = agents_dir.join(format!("{}.md", agent_name));
+    std::fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write agent file: {}", e))?;
+
+    Ok(())
+}
+
+/// Delete project agent from PROJECT/.claude/agents/{name}.md
+#[tauri::command]
+pub async fn delete_project_agent(project_path: String, agent_name: String) -> Result<(), String> {
+    let agents_dir = get_project_agents_dir(&project_path);
+    let file_path = agents_dir.join(format!("{}.md", agent_name));
+
+    if file_path.exists() {
+        std::fs::remove_file(&file_path)
+            .map_err(|e| format!("Failed to delete agent file: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Read project commands from PROJECT/.claude/commands/
+#[tauri::command]
+pub async fn read_project_commands(project_path: String) -> Result<Vec<CommandFile>, String> {
+    let commands_dir = get_project_commands_dir(&project_path);
+
+    if !commands_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut command_files = Vec::new();
+
+    let entries = std::fs::read_dir(&commands_dir)
+        .map_err(|e| format!("Failed to read commands directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
+            let file_name = path
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read command file {}: {}", path.display(), e))?;
+
+            command_files.push(CommandFile {
+                name: file_name,
+                content,
+                exists: true,
+            });
+        }
+    }
+
+    command_files.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(command_files)
+}
+
+/// Write project command to PROJECT/.claude/commands/{name}.md
+#[tauri::command]
+pub async fn write_project_command(
+    project_path: String,
+    command_name: String,
+    content: String,
+) -> Result<(), String> {
+    let commands_dir = get_project_commands_dir(&project_path);
+
+    // Ensure directory exists
+    std::fs::create_dir_all(&commands_dir)
+        .map_err(|e| format!("Failed to create commands directory: {}", e))?;
+
+    let file_path = commands_dir.join(format!("{}.md", command_name));
+    std::fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write command file: {}", e))?;
+
+    Ok(())
+}
+
+/// Delete project command from PROJECT/.claude/commands/{name}.md
+#[tauri::command]
+pub async fn delete_project_command(
+    project_path: String,
+    command_name: String,
+) -> Result<(), String> {
+    let commands_dir = get_project_commands_dir(&project_path);
+    let file_path = commands_dir.join(format!("{}.md", command_name));
+
+    if file_path.exists() {
+        std::fs::remove_file(&file_path)
+            .map_err(|e| format!("Failed to delete command file: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Read project MCP from PROJECT/.mcp.json
+#[tauri::command]
+pub async fn read_project_mcp(project_path: String) -> Result<Option<Value>, String> {
+    let mcp_path = get_project_mcp_path(&project_path);
+
+    if !mcp_path.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&mcp_path)
+        .map_err(|e| format!("Failed to read project MCP: {}", e))?;
+
+    let json: Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse project MCP: {}", e))?;
+
+    Ok(Some(json))
+}
+
+/// Write project MCP to PROJECT/.mcp.json
+#[tauri::command]
+pub async fn write_project_mcp(project_path: String, content: Value) -> Result<(), String> {
+    let mcp_path = get_project_mcp_path(&project_path);
+
+    let json_content = serde_json::to_string_pretty(&content)
+        .map_err(|e| format!("Failed to serialize MCP: {}", e))?;
+
+    std::fs::write(&mcp_path, json_content)
+        .map_err(|e| format!("Failed to write MCP: {}", e))?;
+
+    Ok(())
+}
+
+/// Get project registry (all tracked projects)
+#[tauri::command]
+pub async fn get_project_registry() -> Result<Vec<ProjectRegistryEntry>, String> {
+    let registry = read_project_registry()?;
+    Ok(registry.into_values().collect())
+}
+
+/// Update project registry entry
+#[tauri::command]
+pub async fn update_project_registry(
+    project_path: String,
+    title: String,
+    inherit_from_global: bool,
+    parent_global_config_id: Option<String>,
+) -> Result<(), String> {
+    let entry = ProjectRegistryEntry {
+        project_path: project_path.clone(),
+        title,
+        last_used_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        inherit_from_global,
+        parent_global_config_id,
+    };
+
+    write_project_registry_entry(&project_path, &entry)?;
+    Ok(())
 }

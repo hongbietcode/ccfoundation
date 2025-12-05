@@ -1,10 +1,10 @@
 # Per-Project Configuration for CC Mate
 
 **Date**: 2024-12-05
-**Status**: Phase 2 COMPLETE, Phase 3 Starting
-**Progress**: 40% Complete (Backend + Frontend Data Layer Done, UI Next)
+**Status**: Phase 3 80% Complete (Blocked by i18n fixes)
+**Progress**: 60% Complete (Backend + Data Layer + UI Done, i18n Fixes Needed)
 **Estimate**: 10-12 days
-**Updated**: 2025-12-06
+**Updated**: 2025-12-06 (Code Review Complete)
 
 ---
 
@@ -839,42 +839,188 @@ export const useSetUsingConfig = () => {
 **Files:**
 - `src/lib/query.ts` (+250 lines)
 
-### Phase 3: UI Components (3-4 days)
+### Phase 3: UI Components (3-4 days) - ⚠️ 80% COMPLETE (Blocked by i18n)
 
-**Tasks:**
-1. Create ProjectConfigsPage.tsx
-   - List projects với config status
-   - Auto-import detection logic
-   - Card grid layout
-   - Create/Edit/Delete/Import buttons
-   - Active indicator
-2. Create ProjectConfigEditor.tsx
-   - Reuse form từ ConfigEditorPage
-   - Add inheritance controls
-   - Preview merged config
-3. Update ConfigSwitcherPage.tsx
-   - Rename header
-   - Add link to Project Configs
-4. Update projects/Detail.tsx
-   - Add Tabs component
-   - Integrate ProjectConfigEditor
-   - Auto-create banner
-5. Update Layout.tsx sidebar
-6. Add i18n translations
+**Status:** ⚠️ IN PROGRESS (blocked by P0 i18n issues)
+**Date:** 2025-12-06
+**Duration:** ~3 hours (code complete, needs i18n fixes)
+**Files modified:** 6
+
+**Implementation Details:**
+- 2 new pages created (ProjectConfigsPage, ProjectConfigEditor)
+- 4 files modified (ConfigSwitcherPage, Layout, router, locales)
+- TypeScript build: ✅ 0 errors
+- Architecture: ✅ Follows patterns correctly
+- Security: ✅ No vulnerabilities
+- Performance: ⚠️ Auto-import needs optimization (H2)
+- **BLOCKER:** ❌ 11 hardcoded strings missing i18n (P0)
+
+**Completed Tasks:**
+1. ✅ Create ProjectConfigsPage.tsx
+   - List projects with config status ✅
+   - Auto-import detection logic ✅ (needs optimization)
+   - Card grid layout ✅
+   - Create/Edit/Delete/Import buttons ✅
+   - Active indicator ✅
+2. ✅ Create ProjectConfigEditor.tsx
+   - Reuse form from ConfigEditorPage ✅
+   - Add inheritance controls ✅
+   - Preview merged config ⚠️ (deferred)
+3. ✅ Update ConfigSwitcherPage.tsx
+   - Rename header ✅
+   - Add link to Project Configs ✅
+4. ⏳ Update projects/Detail.tsx (deferred to Phase 4)
+   - Add Tabs component (deferred)
+   - Integrate ProjectConfigEditor (deferred)
+   - Auto-create banner (deferred)
+5. ✅ Update Layout.tsx sidebar
+6. ❌ Add i18n translations (BLOCKED - P0 issue)
+
+**Known Issues:**
+- **P0:** 11 hardcoded strings (ProjectConfigsPage: 9, ProjectConfigEditor: 3, Layout: 1)
+- **H1:** Toast messages not using i18n in query.ts
+- **H2:** Auto-import detection triggers N API calls (scalability issue)
+- **M1:** Missing error boundaries
+- **M2:** Form reset dependency warning
+
+**Remaining Work:**
+- [ ] Fix i18n hardcoded strings (P0 - 30 min)
+- [ ] Fix toast message i18n (H1 - 15 min)
+- [ ] Add error boundaries (M1 - 30 min)
+- [ ] Optimize auto-import detection (H2 - 2 hours)
+
+**Total Time to Complete Phase 3:** 3.5 hours
 
 **New files:**
-- `src/pages/ProjectConfigsPage.tsx`
-- `src/pages/ProjectConfigEditor.tsx`
+- `src/pages/ProjectConfigsPage.tsx` (213 lines)
+- `src/pages/ProjectConfigEditor.tsx` (396 lines)
 
 **Modified files:**
 - `src/pages/ConfigSwitcherPage.tsx`
-- `src/pages/projects/Detail.tsx`
 - `src/components/Layout.tsx`
+- `src/router.tsx` (2 new routes added)
+- `src/i18n/locales/en.json` (toast keys added)
+
+### Phase 3.5: Project Selector Screen (4-6 hours) - 📋 PLANNED
+
+**Status:** 📋 PLANNED
+**Reason:** User feedback - ProjectConfigsPage needs project selection UI
+**Priority:** HIGH - Blocks usability of Phase 3 components
+
+**Problem Statement:**
+Current ProjectConfigsPage shows empty state with no way to:
+- Select which project to create config for
+- See all Claude Code projects from ~/.claude.json
+- Understand which projects have configs vs which don't
+
+**Solution:**
+Create intermediate "Project Selector" screen that merges:
+- All projects from `~/.claude.json` (Claude Code tracked projects)
+- Existing project configs from `~/.ccconfig/project-configs/` (CC Mate configs)
+
+**Implementation Plan:**
+
+**Phase 1: Helper Utilities (30 min)**
+- Create `src/lib/project-utils.ts`
+- Functions:
+  - `mergeProjectsWithConfigs()` - Merge claude projects + existing configs
+  - `getProjectStatus()` - Return status: "has_config" | "has_local" | "none"
+  - `filterProjectsByStatus()` - Filter projects by status
+  - `searchProjects()` - Search by name/path
+
+**Phase 2: UI Components (2 hours)**
+- Create `src/components/project-configs/ProjectCard.tsx`
+  - Show project name, path, status badge
+  - Actions: Create/Import/Edit/Activate/Delete based on status
+  - Active indicator (star + border) for activated project
+- Create `src/components/project-configs/ProjectStatusBadge.tsx`
+  - 3 states: "Has Config", "Local Settings", "No Config"
+- Create `src/components/project-configs/ProjectActionsMenu.tsx`
+  - Dropdown menu for secondary actions
+  - Delete, Edit, Activate options
+
+**Phase 3: Update ProjectConfigsPage (1.5 hours)**
+- Replace empty state with full project list
+- Add search bar (filter by name/path)
+- Add filter dropdown (All/Has Config/No Config)
+- Add "Add Project" button (opens folder picker)
+- Grid layout with ProjectCard components
+- Lazy load local settings check (avoid N+1 API calls)
+
+**Phase 4: i18n Translations (30 min)**
+- Add keys for:
+  - "projectSelector.title"
+  - "projectSelector.searchPlaceholder"
+  - "projectSelector.filterAll"
+  - "projectSelector.filterHasConfig"
+  - "projectSelector.filterNoConfig"
+  - "projectSelector.addProject"
+  - "projectSelector.status.hasConfig"
+  - "projectSelector.status.hasLocal"
+  - "projectSelector.status.noConfig"
+  - "projectSelector.actions.create"
+  - "projectSelector.actions.import"
+  - "projectSelector.actions.edit"
+  - "projectSelector.actions.activate"
+  - "projectSelector.actions.delete"
+  - "projectSelector.noProjects"
+  - "projectSelector.noSearchResults"
+
+**Phase 5: Testing & Polish (1 hour)**
+- Test with 0 projects, 1 project, 100+ projects
+- Test search functionality
+- Test filter functionality
+- Test create/import/edit flows
+- Test active project indicator
+- Error handling for missing ~/.claude.json
+
+**New Files:**
+- `src/lib/project-utils.ts`
+- `src/components/project-configs/ProjectCard.tsx`
+- `src/components/project-configs/ProjectStatusBadge.tsx`
+- `src/components/project-configs/ProjectActionsMenu.tsx`
+
+**Modified Files:**
+- `src/pages/ProjectConfigsPage.tsx` (major rewrite)
+- `src/i18n/locales/en.json` (16+ new keys)
+- `src/i18n/locales/zh.json` (16+ new keys)
+- `src/i18n/locales/ja.json` (16+ new keys)
+- `src/i18n/locales/fr.json` (16+ new keys)
+
+**Data Flow:**
+```
+useClaudeProjects() → All Claude projects from ~/.claude.json
+       +
+useProjectConfigs() → Existing CC Mate configs
+       ↓
+mergeProjectsWithConfigs() → Unified project list with status
+       ↓
+ProjectCard × N → Display each project with appropriate actions
+```
+
+**UI States:**
+1. **Has Config**: Edit, Activate, Delete buttons
+2. **Has Local Settings**: Import button (imports .claude/settings.json)
+3. **No Config**: Create button (auto-create from global config)
+
+**Questions to Resolve:**
+- [ ] Sort projects by: name, path, or last used?
+- [ ] Pagination needed for 100+ projects?
+- [ ] Virtual scrolling for performance?
+
+**Dependencies:**
+- Requires `useClaudeProjects()` hook (already exists in query.ts)
+- Requires `useAutoCreateProjectConfig()` hook (already exists)
+- Requires `useCheckProjectLocalSettings()` hook (already exists)
+
+**Total Estimated Time:** 4-6 hours
+
+---
 
 ### Phase 4: Routing & Integration (1 day)
 
 **Tasks:**
-1. Update router.tsx với new routes
+1. Update router.tsx với new routes (✅ DONE in Phase 3)
 2. Test navigation flow
 3. Test context switching (global ↔ project)
 4. Test auto-import flow
@@ -882,7 +1028,7 @@ export const useSetUsingConfig = () => {
 6. Add error boundaries
 
 **Files:**
-- `src/router.tsx`
+- `src/router.tsx` (✅ already updated)
 
 ### Phase 5: Polish & Testing (2 days)
 
