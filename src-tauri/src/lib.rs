@@ -1,6 +1,6 @@
 mod commands;
-mod tray;
 mod hook_server;
+mod tray;
 
 use commands::*;
 use hook_server::start_hook_server;
@@ -107,12 +107,12 @@ pub fn run() {
             app.on_menu_event(|app_handle, event| {
                 use tauri::Manager;
                 let event_id = event.id().0.as_str();
-                
+
                 // Try to handle as tray menu event first
                 if tray::handle_tray_menu_event(&app_handle, event_id) {
                     return;
                 }
-                
+
                 // Handle app menu events
                 match event_id {
                     "open_config_path" => {
@@ -205,7 +205,25 @@ pub fn run() {
             delete_claude_command,
             read_claude_agents,
             write_claude_agent,
-            delete_claude_agent
+            delete_claude_agent,
+            // Per-project configuration commands (Phase 1)
+            get_project_configs,
+            get_project_config,
+            create_project_config,
+            update_project_config,
+            delete_project_config,
+            activate_project_config,
+            get_active_context,
+            switch_to_global_context,
+            auto_create_project_config,
+            get_active_merged_config,
+            check_project_local_settings,
+            import_project_local_settings,
+            update_project_config_path,
+            add_project_to_tracking,
+            validate_project_path,
+            get_managed_settings,
+            get_managed_mcp_servers
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "macos")]

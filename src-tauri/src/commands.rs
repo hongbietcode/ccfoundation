@@ -1,9 +1,10 @@
+use nanoid;
+use reqwest;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use tauri_plugin_updater::UpdaterExt;
-use reqwest;
 use uuid::Uuid;
-use nanoid;
 
 // Application configuration directory
 const APP_CONFIG_DIR: &str = ".ccconfig";
@@ -556,8 +557,19 @@ pub async fn set_using_config(store_id: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to write user settings: {}", e))?;
     }
 
-    // Write back to stores file
-    let json_content = serde_json::to_string_pretty(&stores_data)
+    // Write back to stores file (with active context update)
+    // Parse as generic Value to preserve and update active context
+    let mut stores_value: Value = serde_json::to_value(&stores_data)
+        .map_err(|e| format!("Failed to serialize stores: {}", e))?;
+
+    // Update activeContext to global
+    stores_value["activeContext"] = serde_json::json!({
+        "type": "global",
+        "id": store_id,
+        "projectPath": null
+    });
+
+    let json_content = serde_json::to_string_pretty(&stores_value)
         .map_err(|e| format!("Failed to serialize stores: {}", e))?;
 
     std::fs::write(&stores_file, json_content)
@@ -783,7 +795,8 @@ pub async fn open_config_path() -> Result<(), String> {
 // MCP Server management functions
 
 #[tauri::command]
-pub async fn get_global_mcp_servers() -> Result<std::collections::HashMap<String, McpServer>, String> {
+pub async fn get_global_mcp_servers() -> Result<std::collections::HashMap<String, McpServer>, String>
+{
     let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
     let claude_json_path = home_dir.join(".claude.json");
 
@@ -797,7 +810,8 @@ pub async fn get_global_mcp_servers() -> Result<std::collections::HashMap<String
     let json_value: Value = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse .claude.json: {}", e))?;
 
-    let mcp_servers_obj = json_value.get("mcpServers")
+    let mcp_servers_obj = json_value
+        .get("mcpServers")
         .and_then(|servers| servers.as_object())
         .cloned()
         .unwrap_or_else(serde_json::Map::new);
@@ -996,7 +1010,10 @@ pub async fn unlock_cc_ext() -> Result<(), String> {
         if json_value.get("primaryApiKey").is_none() {
             // Add primaryApiKey to existing config
             if let Some(obj) = json_value.as_object_mut() {
-                obj.insert("primaryApiKey".to_string(), Value::String("xxx".to_string()));
+                obj.insert(
+                    "primaryApiKey".to_string(),
+                    Value::String("xxx".to_string()),
+                );
             }
 
             // Write back to file
@@ -1048,7 +1065,10 @@ pub async fn read_project_usage_files() -> Result<Vec<ProjectUsageRecord>, Strin
     let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
     let projects_dir = home_dir.join(".claude/projects");
 
-    println!("🔍 Looking for projects directory: {}", projects_dir.display());
+    println!(
+        "🔍 Looking for projects directory: {}",
+        projects_dir.display()
+    );
 
     if !projects_dir.exists() {
         println!("❌ Projects directory does not exist");
@@ -1062,7 +1082,10 @@ pub async fn read_project_usage_files() -> Result<Vec<ProjectUsageRecord>, Strin
     let mut lines_processed = 0;
 
     // Recursively find all .jsonl files in the projects directory and subdirectories
-    fn find_jsonl_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) -> Result<(), String> {
+    fn find_jsonl_files(
+        dir: &std::path::Path,
+        files: &mut Vec<std::path::PathBuf>,
+    ) -> Result<(), String> {
         let entries = std::fs::read_dir(dir)
             .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
 
@@ -1106,22 +1129,24 @@ pub async fn read_project_usage_files() -> Result<Vec<ProjectUsageRecord>, Strin
                 .map_err(|e| format!("Failed to parse JSON line: {}", e))?;
 
             // Extract the required fields
-            let uuid = json_value.get("uuid")
+            let uuid = json_value
+                .get("uuid")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
 
-            let timestamp = json_value.get("timestamp")
+            let timestamp = json_value
+                .get("timestamp")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
 
             // Extract model field (optional) - check both top-level and nested in message field
-            let model = if let Some(model_str) = json_value.get("model")
-                .and_then(|v| v.as_str()) {
+            let model = if let Some(model_str) = json_value.get("model").and_then(|v| v.as_str()) {
                 Some(model_str.to_string())
             } else if let Some(message_obj) = json_value.get("message") {
-                message_obj.get("model")
+                message_obj
+                    .get("model")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
             } else {
@@ -1132,14 +1157,18 @@ pub async fn read_project_usage_files() -> Result<Vec<ProjectUsageRecord>, Strin
             let usage = if let Some(usage_obj) = json_value.get("usage") {
                 Some(UsageData {
                     input_tokens: usage_obj.get("input_tokens").and_then(|v| v.as_u64()),
-                    cache_read_input_tokens: usage_obj.get("cache_read_input_tokens").and_then(|v| v.as_u64()),
+                    cache_read_input_tokens: usage_obj
+                        .get("cache_read_input_tokens")
+                        .and_then(|v| v.as_u64()),
                     output_tokens: usage_obj.get("output_tokens").and_then(|v| v.as_u64()),
                 })
             } else if let Some(message_obj) = json_value.get("message") {
                 if let Some(usage_obj) = message_obj.get("usage") {
                     Some(UsageData {
                         input_tokens: usage_obj.get("input_tokens").and_then(|v| v.as_u64()),
-                        cache_read_input_tokens: usage_obj.get("cache_read_input_tokens").and_then(|v| v.as_u64()),
+                        cache_read_input_tokens: usage_obj
+                            .get("cache_read_input_tokens")
+                            .and_then(|v| v.as_u64()),
                         output_tokens: usage_obj.get("output_tokens").and_then(|v| v.as_u64()),
                     })
                 } else {
@@ -1170,7 +1199,12 @@ pub async fn read_project_usage_files() -> Result<Vec<ProjectUsageRecord>, Strin
         }
     }
 
-    println!("📊 Summary: Processed {} files, {} lines, found {} records", files_processed, lines_processed, all_records.len());
+    println!(
+        "📊 Summary: Processed {} files, {} lines, found {} records",
+        files_processed,
+        lines_processed,
+        all_records.len()
+    );
     Ok(all_records)
 }
 
@@ -1239,19 +1273,25 @@ pub async fn install_and_restart(app: tauri::AppHandle) -> Result<(), String> {
                     println!("🎯 Update target: {:?}", update.target);
 
                     // Download and install the update
-                    match update.download_and_install(
-                        |chunk_length, content_length| {
-                            let progress = if let Some(total) = content_length {
-                                (chunk_length as f64 / total as f64) * 100.0
-                            } else {
-                                0.0
-                            };
-                            println!("⬇️  Download progress: {:.1}% ({} bytes)", progress, chunk_length);
-                        },
-                        || {
-                            println!("✅ Download completed! Preparing to restart...");
-                        }
-                    ).await {
+                    match update
+                        .download_and_install(
+                            |chunk_length, content_length| {
+                                let progress = if let Some(total) = content_length {
+                                    (chunk_length as f64 / total as f64) * 100.0
+                                } else {
+                                    0.0
+                                };
+                                println!(
+                                    "⬇️  Download progress: {:.1}% ({} bytes)",
+                                    progress, chunk_length
+                                );
+                            },
+                            || {
+                                println!("✅ Download completed! Preparing to restart...");
+                            },
+                        )
+                        .await
+                    {
                         Ok(_) => {
                             println!("🔄 Update installed successfully! Restarting application in 500ms...");
 
@@ -1391,7 +1431,9 @@ fn get_os_version() -> Result<String, String> {
         if let Ok(content) = fs::read_to_string("/etc/os-release") {
             for line in content.lines() {
                 if line.starts_with("VERSION_ID=") {
-                    let version = line.split('=').nth(1)
+                    let version = line
+                        .split('=')
+                        .nth(1)
                         .unwrap_or("Unknown")
                         .trim_matches('"');
                     return Ok(version.to_string());
@@ -1437,7 +1479,8 @@ pub async fn read_claude_projects() -> Result<Vec<ProjectConfig>, String> {
     let json_value: Value = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse .claude.json: {}", e))?;
 
-    let projects_obj = json_value.get("projects")
+    let projects_obj = json_value
+        .get("projects")
         .and_then(|projects| projects.as_object())
         .cloned()
         .unwrap_or_else(serde_json::Map::new);
@@ -1472,8 +1515,8 @@ pub async fn read_claude_config_file() -> Result<ClaudeConfigFile, String> {
         let content = std::fs::read_to_string(&claude_json_path)
             .map_err(|e| format!("Failed to read .claude.json: {}", e))?;
 
-        let json_content: Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let json_content: Value =
+            serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
         Ok(ClaudeConfigFile {
             path: path_str,
@@ -1504,7 +1547,11 @@ pub async fn write_claude_config_file(content: Value) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn track(event: String, properties: serde_json::Value, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn track(
+    event: String,
+    properties: serde_json::Value,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
     println!("📊 Tracking event: {}", event);
 
     // Get distinct_id
@@ -1539,12 +1586,19 @@ pub async fn track(event: String, properties: serde_json::Value, app: tauri::App
     }
 
     // Add timestamp if not provided
-    if !payload["properties"].as_object().unwrap().contains_key("timestamp") {
+    if !payload["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("timestamp")
+    {
         let timestamp = chrono::Utc::now().to_rfc3339();
         payload["properties"]["timestamp"] = serde_json::Value::String(timestamp);
     }
 
-    println!("📤 Sending to PostHog: {}", serde_json::to_string_pretty(&payload).unwrap());
+    println!(
+        "📤 Sending to PostHog: {}",
+        serde_json::to_string_pretty(&payload).unwrap()
+    );
 
     // Send request to PostHog
     let client = reqwest::Client::new();
@@ -1587,9 +1641,13 @@ fn get_latest_hook_command() -> serde_json::Value {
 }
 
 /// Update existing ccmate hooks for specified events (doesn't add new ones)
-fn update_existing_hooks(hooks_obj: &mut serde_json::Map<String, serde_json::Value>, events: &[&str]) -> Result<bool, String> {
+fn update_existing_hooks(
+    hooks_obj: &mut serde_json::Map<String, serde_json::Value>,
+    events: &[&str],
+) -> Result<bool, String> {
     let latest_hook_command = get_latest_hook_command();
-    let latest_command_str = latest_hook_command.get("command")
+    let latest_command_str = latest_hook_command
+        .get("command")
         .and_then(|cmd| cmd.as_str())
         .unwrap_or("");
 
@@ -1603,12 +1661,18 @@ fn update_existing_hooks(hooks_obj: &mut serde_json::Map<String, serde_json::Val
                     for hook in hooks_array.iter_mut() {
                         if hook.get("__ccmate__").is_some() {
                             // Compare only the command string, not the entire JSON object
-                            if let Some(existing_command) = hook.get("command").and_then(|cmd| cmd.as_str()) {
+                            if let Some(existing_command) =
+                                hook.get("command").and_then(|cmd| cmd.as_str())
+                            {
                                 if existing_command != latest_command_str {
                                     // Update only the command field, preserve other properties
-                                    hook["command"] = serde_json::Value::String(latest_command_str.to_string());
+                                    hook["command"] =
+                                        serde_json::Value::String(latest_command_str.to_string());
                                     hook_updated = true;
-                                    println!("🔄 Updated {} hook command: {}", event, latest_command_str);
+                                    println!(
+                                        "🔄 Updated {} hook command: {}",
+                                        event, latest_command_str
+                                    );
                                 }
                             }
                         }
@@ -1622,7 +1686,10 @@ fn update_existing_hooks(hooks_obj: &mut serde_json::Map<String, serde_json::Val
 }
 
 /// Update or add ccmate hooks for specified events
-fn update_or_add_hooks(hooks_obj: &mut serde_json::Map<String, serde_json::Value>, events: &[&str]) -> Result<bool, String> {
+fn update_or_add_hooks(
+    hooks_obj: &mut serde_json::Map<String, serde_json::Value>,
+    events: &[&str],
+) -> Result<bool, String> {
     let latest_hook_command = get_latest_hook_command();
     let mut hook_updated = false;
 
@@ -1646,7 +1713,9 @@ fn update_or_add_hooks(hooks_obj: &mut serde_json::Map<String, serde_json::Value
             // If no ccmate hooks found, add one
             let ccmate_hook_exists = event_hooks.iter().any(|entry| {
                 if let Some(hooks_array) = entry.get("hooks").and_then(|h| h.as_array()) {
-                    hooks_array.iter().any(|hook| hook.get("__ccmate__").is_some())
+                    hooks_array
+                        .iter()
+                        .any(|hook| hook.get("__ccmate__").is_some())
                 } else {
                     false
                 }
@@ -1664,7 +1733,10 @@ fn update_or_add_hooks(hooks_obj: &mut serde_json::Map<String, serde_json::Value
             let ccmate_hook_entry = serde_json::json!({
                 "hooks": [latest_hook_command.clone()]
             });
-            hooks_obj.insert(event.to_string(), serde_json::Value::Array(vec![ccmate_hook_entry]));
+            hooks_obj.insert(
+                event.to_string(),
+                serde_json::Value::Array(vec![ccmate_hook_entry]),
+            );
             hook_updated = true;
         }
     }
@@ -1815,7 +1887,8 @@ pub async fn remove_claude_code_hook() -> Result<(), String> {
                 for entry in event_hooks.iter() {
                     if let Some(hooks_array) = entry.get("hooks").and_then(|h| h.as_array()) {
                         // Filter out hooks that have __ccmate__ key
-                        let filtered_hooks: Vec<serde_json::Value> = hooks_array.iter()
+                        let filtered_hooks: Vec<serde_json::Value> = hooks_array
+                            .iter()
                             .filter(|hook| hook.get("__ccmate__").is_none())
                             .cloned()
                             .collect();
@@ -1906,8 +1979,6 @@ pub async fn update_notification_settings(settings: NotificationSettings) -> Res
     Ok(())
 }
 
-
-
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct CommandFile {
     pub name: String,
@@ -1935,7 +2006,8 @@ pub async fn read_claude_commands() -> Result<Vec<CommandFile>, String> {
         let path = entry.path();
 
         if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
-            let file_name = path.file_stem()
+            let file_name = path
+                .file_stem()
                 .and_then(|name| name.to_str())
                 .unwrap_or("unknown")
                 .to_string();
@@ -2016,7 +2088,8 @@ pub async fn read_claude_agents() -> Result<Vec<AgentFile>, String> {
         let path = entry.path();
 
         if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
-            let file_name = path.file_stem()
+            let file_name = path
+                .file_stem()
                 .and_then(|name| name.to_str())
                 .unwrap_or("unknown")
                 .to_string();
@@ -2066,4 +2139,784 @@ pub async fn delete_claude_agent(agent_name: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Per-Project Configuration - Phase 1: Backend Foundation
+// ============================================================================
+
+/// Project configuration store - represents a project-specific config
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ProjectConfigStore {
+    #[serde(rename = "projectPath")]
+    pub project_path: String,
+    #[serde(rename = "canonicalPath")]
+    pub canonical_path: String,
+    pub id: String,
+    pub title: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: u64,
+    #[serde(rename = "lastUsedAt")]
+    pub last_used_at: u64,
+    pub settings: Value,
+    #[serde(rename = "inheritFromGlobal")]
+    pub inherit_from_global: bool,
+    #[serde(rename = "parentGlobalConfigId")]
+    pub parent_global_config_id: Option<String>,
+}
+
+/// Active context - tracks whether global or project config is active
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ActiveContext {
+    #[serde(rename = "type")]
+    pub context_type: String, // "global" or "project"
+    pub id: String,
+    #[serde(rename = "projectPath")]
+    pub project_path: Option<String>,
+}
+
+/// Enhanced stores data with active context
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct EnhancedStoresData {
+    pub configs: Vec<ConfigStore>,
+    pub distinct_id: Option<String>,
+    pub notification: Option<NotificationSettings>,
+    #[serde(rename = "activeContext")]
+    pub active_context: Option<ActiveContext>,
+}
+
+// ============================================================================
+// Helper Functions for Project Configs
+// ============================================================================
+
+/// Canonicalize path (resolve symlinks, normalize)
+fn canonicalize_project_path(path: &str) -> Result<String, String> {
+    std::fs::canonicalize(path)
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("Failed to canonicalize path: {}", e))
+}
+
+/// Hash project path using SHA256 (first 16 characters)
+fn hash_project_path(path: &str) -> Result<String, String> {
+    let canonical = canonicalize_project_path(path)?;
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    let result = hasher.finalize();
+    Ok(format!("{:x}", result)[..16].to_string())
+}
+
+/// Get project configs directory
+fn get_project_configs_dir() -> Result<PathBuf, String> {
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    Ok(home_dir.join(APP_CONFIG_DIR).join("project-configs"))
+}
+
+/// Read project config file by path
+fn read_project_config_file(project_path: &str) -> Result<Option<ProjectConfigStore>, String> {
+    let hash = hash_project_path(project_path)?;
+    let config_dir = get_project_configs_dir()?;
+    let config_file = config_dir.join(format!("{}.json", hash));
+
+    if !config_file.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&config_file)
+        .map_err(|e| format!("Failed to read project config: {}", e))?;
+
+    let config: ProjectConfigStore = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse project config: {}", e))?;
+
+    Ok(Some(config))
+}
+
+/// Write project config file
+fn write_project_config_file(config: &ProjectConfigStore) -> Result<(), String> {
+    let hash = hash_project_path(&config.project_path)?;
+    let config_dir = get_project_configs_dir()?;
+
+    // Ensure directory exists
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create project configs directory: {}", e))?;
+
+    let config_file = config_dir.join(format!("{}.json", hash));
+
+    let json_content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize project config: {}", e))?;
+
+    std::fs::write(&config_file, json_content)
+        .map_err(|e| format!("Failed to write project config: {}", e))?;
+
+    Ok(())
+}
+
+/// Deep merge two JSON values (project overrides global)
+fn merge_settings(global: &Value, project: &Value) -> Value {
+    match (global, project) {
+        (Value::Object(global_obj), Value::Object(project_obj)) => {
+            let mut result = global_obj.clone();
+
+            for (key, project_value) in project_obj {
+                if let Some(global_value) = global_obj.get(key) {
+                    // Special handling for permissions.deny and permissions.allow - union arrays
+                    if key == "permissions" {
+                        if let (Value::Object(global_perms), Value::Object(project_perms)) =
+                            (global_value, project_value)
+                        {
+                            let mut merged_perms = global_perms.clone();
+                            for (perm_key, perm_value) in project_perms {
+                                if (perm_key == "deny" || perm_key == "allow")
+                                    && perm_value.is_array()
+                                {
+                                    // Union arrays for deny/allow
+                                    if let Some(Value::Array(global_arr)) =
+                                        global_perms.get(perm_key)
+                                    {
+                                        if let Value::Array(project_arr) = perm_value {
+                                            let mut union: Vec<Value> = global_arr.clone();
+                                            for item in project_arr {
+                                                if !union.contains(item) {
+                                                    union.push(item.clone());
+                                                }
+                                            }
+                                            merged_perms
+                                                .insert(perm_key.clone(), Value::Array(union));
+                                        }
+                                    } else {
+                                        merged_perms.insert(perm_key.clone(), perm_value.clone());
+                                    }
+                                } else {
+                                    // Other permission fields - project overrides
+                                    merged_perms.insert(perm_key.clone(), perm_value.clone());
+                                }
+                            }
+                            result.insert(key.clone(), Value::Object(merged_perms));
+                            continue;
+                        }
+                    }
+
+                    // For nested objects, recursively merge
+                    if global_value.is_object() && project_value.is_object() {
+                        result.insert(key.clone(), merge_settings(global_value, project_value));
+                    } else {
+                        // Project overrides global for all other cases
+                        result.insert(key.clone(), project_value.clone());
+                    }
+                } else {
+                    // Key only in project - add it
+                    result.insert(key.clone(), project_value.clone());
+                }
+            }
+
+            Value::Object(result)
+        }
+        // For non-objects, project value overrides global
+        _ => project.clone(),
+    }
+}
+
+/// Get managed settings paths (enterprise) based on OS
+fn get_managed_settings_paths() -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    return vec![PathBuf::from(
+        "/Library/Application Support/ClaudeCode/managed-settings.json",
+    )];
+
+    #[cfg(target_os = "linux")]
+    return vec![PathBuf::from("/etc/claude-code/managed-settings.json")];
+
+    #[cfg(target_os = "windows")]
+    return vec![PathBuf::from(
+        "C:\\ProgramData\\ClaudeCode\\managed-settings.json",
+    )];
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    return vec![];
+}
+
+/// Get managed MCP paths (enterprise) based on OS
+fn get_managed_mcp_paths() -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    return vec![PathBuf::from(
+        "/Library/Application Support/ClaudeCode/managed-mcp.json",
+    )];
+
+    #[cfg(target_os = "linux")]
+    return vec![PathBuf::from("/etc/claude-code/managed-mcp.json")];
+
+    #[cfg(target_os = "windows")]
+    return vec![PathBuf::from(
+        "C:\\ProgramData\\ClaudeCode\\managed-mcp.json",
+    )];
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    return vec![];
+}
+
+/// Check if project has local .claude/settings.json
+fn check_project_local_settings_file(project_path: &str) -> Result<Option<Value>, String> {
+    let settings_path = PathBuf::from(project_path).join(".claude/settings.json");
+
+    if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read local settings: {}", e))?;
+        let json: Value = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse local settings: {}", e))?;
+        Ok(Some(json))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Read active context from stores.json
+fn read_active_context() -> Result<Option<ActiveContext>, String> {
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    let stores_file = home_dir.join(APP_CONFIG_DIR).join("stores.json");
+
+    if !stores_file.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&stores_file)
+        .map_err(|e| format!("Failed to read stores file: {}", e))?;
+
+    let stores_data: EnhancedStoresData = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse stores file: {}", e))?;
+
+    Ok(stores_data.active_context)
+}
+
+/// Write active context to stores.json
+fn write_active_context(context: Option<ActiveContext>) -> Result<(), String> {
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    let stores_file = home_dir.join(APP_CONFIG_DIR).join("stores.json");
+
+    // Read existing stores
+    let content = std::fs::read_to_string(&stores_file)
+        .map_err(|e| format!("Failed to read stores file: {}", e))?;
+
+    // Parse as generic Value to preserve existing fields
+    let mut stores_data: Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse stores file: {}", e))?;
+
+    // Update activeContext
+    if let Some(ctx) = context {
+        stores_data["activeContext"] = serde_json::to_value(&ctx)
+            .map_err(|e| format!("Failed to serialize active context: {}", e))?;
+    } else if let Some(obj) = stores_data.as_object_mut() {
+        obj.remove("activeContext");
+    }
+
+    // Write back
+    let json_content = serde_json::to_string_pretty(&stores_data)
+        .map_err(|e| format!("Failed to serialize stores: {}", e))?;
+
+    std::fs::write(&stores_file, json_content)
+        .map_err(|e| format!("Failed to write stores file: {}", e))?;
+
+    Ok(())
+}
+
+/// Apply merged config to ~/.claude/settings.json
+async fn apply_config_to_settings(settings: &Value) -> Result<(), String> {
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    let user_settings_path = home_dir.join(".claude/settings.json");
+
+    // Create .claude directory if it doesn't exist
+    if let Some(parent) = user_settings_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create .claude directory: {}", e))?;
+    }
+
+    // Read existing settings if file exists
+    let mut existing_settings = if user_settings_path.exists() {
+        let content = std::fs::read_to_string(&user_settings_path)
+            .map_err(|e| format!("Failed to read existing settings: {}", e))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse existing settings: {}", e))?
+    } else {
+        serde_json::Value::Object(serde_json::Map::new())
+    };
+
+    // Merge the new settings into existing settings
+    if let Some(settings_obj) = settings.as_object() {
+        if let Some(existing_obj) = existing_settings.as_object_mut() {
+            for (key, value) in settings_obj {
+                existing_obj.insert(key.clone(), value.clone());
+            }
+        } else {
+            existing_settings = settings.clone();
+        }
+    } else {
+        existing_settings = settings.clone();
+    }
+
+    // Write the merged settings back to file
+    let json_content = serde_json::to_string_pretty(&existing_settings)
+        .map_err(|e| format!("Failed to serialize merged settings: {}", e))?;
+
+    std::fs::write(&user_settings_path, json_content)
+        .map_err(|e| format!("Failed to write user settings: {}", e))?;
+
+    Ok(())
+}
+
+// ============================================================================
+// Project Config Commands (17 commands)
+// ============================================================================
+
+/// 1. Get all project configs
+#[tauri::command]
+pub async fn get_project_configs() -> Result<Vec<ProjectConfigStore>, String> {
+    let config_dir = get_project_configs_dir()?;
+
+    if !config_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut configs = Vec::new();
+
+    let entries = std::fs::read_dir(&config_dir)
+        .map_err(|e| format!("Failed to read project configs directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().map(|ext| ext == "json").unwrap_or(false) {
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read config file: {}", e))?;
+
+            if let Ok(config) = serde_json::from_str::<ProjectConfigStore>(&content) {
+                configs.push(config);
+            }
+        }
+    }
+
+    // Sort by last_used_at descending (most recent first)
+    configs.sort_by(|a, b| b.last_used_at.cmp(&a.last_used_at));
+
+    Ok(configs)
+}
+
+/// 2. Get project config by path
+#[tauri::command]
+pub async fn get_project_config(
+    project_path: String,
+) -> Result<Option<ProjectConfigStore>, String> {
+    read_project_config_file(&project_path)
+}
+
+/// 3. Create project config
+#[tauri::command]
+pub async fn create_project_config(
+    project_path: String,
+    title: String,
+    settings: Value,
+    parent_global_config_id: Option<String>,
+) -> Result<ProjectConfigStore, String> {
+    // Check if config already exists
+    if read_project_config_file(&project_path)?.is_some() {
+        return Err("Project config already exists".to_string());
+    }
+
+    let canonical_path = canonicalize_project_path(&project_path)?;
+    let id = nanoid::nanoid!(6);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| format!("Failed to get timestamp: {}", e))?
+        .as_secs();
+
+    let config = ProjectConfigStore {
+        project_path: project_path.clone(),
+        canonical_path,
+        id,
+        title,
+        created_at: now,
+        last_used_at: 0,
+        settings,
+        inherit_from_global: parent_global_config_id.is_some(),
+        parent_global_config_id,
+    };
+
+    write_project_config_file(&config)?;
+
+    Ok(config)
+}
+
+/// 4. Update project config
+#[tauri::command]
+pub async fn update_project_config(
+    project_path: String,
+    title: String,
+    settings: Value,
+) -> Result<ProjectConfigStore, String> {
+    let mut config = read_project_config_file(&project_path)?.ok_or("Project config not found")?;
+
+    config.title = title;
+    config.settings = settings;
+
+    write_project_config_file(&config)?;
+
+    // If this project is currently active, also update settings.json
+    if let Some(active_ctx) = read_active_context()? {
+        if active_ctx.context_type == "project"
+            && active_ctx.project_path.as_ref() == Some(&project_path)
+        {
+            // Get parent global config if inheriting
+            let final_settings = if config.inherit_from_global {
+                if let Some(parent_id) = &config.parent_global_config_id {
+                    let stores = get_stores().await?;
+                    if let Some(parent) = stores.into_iter().find(|s| &s.id == parent_id) {
+                        merge_settings(&parent.settings, &config.settings)
+                    } else {
+                        config.settings.clone()
+                    }
+                } else {
+                    config.settings.clone()
+                }
+            } else {
+                config.settings.clone()
+            };
+
+            apply_config_to_settings(&final_settings).await?;
+        }
+    }
+
+    Ok(config)
+}
+
+/// 5. Delete project config
+#[tauri::command]
+pub async fn delete_project_config(project_path: String) -> Result<(), String> {
+    let hash = hash_project_path(&project_path)?;
+    let config_dir = get_project_configs_dir()?;
+    let config_file = config_dir.join(format!("{}.json", hash));
+
+    if config_file.exists() {
+        std::fs::remove_file(&config_file)
+            .map_err(|e| format!("Failed to delete project config: {}", e))?;
+    }
+
+    // If this was the active project, clear active context
+    if let Some(active_ctx) = read_active_context()? {
+        if active_ctx.context_type == "project"
+            && active_ctx.project_path.as_ref() == Some(&project_path)
+        {
+            write_active_context(None)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// 6. Activate project config (switch context)
+#[tauri::command]
+pub async fn activate_project_config(project_path: String) -> Result<(), String> {
+    let config = read_project_config_file(&project_path)?.ok_or("Project config not found")?;
+
+    // Update last_used_at
+    let mut updated_config = config.clone();
+    updated_config.last_used_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| format!("Failed to get timestamp: {}", e))?
+        .as_secs();
+    write_project_config_file(&updated_config)?;
+
+    // Get merged settings
+    let final_settings = if config.inherit_from_global {
+        if let Some(parent_id) = &config.parent_global_config_id {
+            let stores = get_stores().await?;
+            if let Some(parent) = stores.into_iter().find(|s| &s.id == parent_id) {
+                merge_settings(&parent.settings, &config.settings)
+            } else {
+                config.settings.clone()
+            }
+        } else {
+            config.settings.clone()
+        }
+    } else {
+        config.settings.clone()
+    };
+
+    // Apply merged config to settings.json
+    apply_config_to_settings(&final_settings).await?;
+
+    // Update active context
+    let active_ctx = ActiveContext {
+        context_type: "project".to_string(),
+        id: config.id.clone(),
+        project_path: Some(project_path),
+    };
+    write_active_context(Some(active_ctx))?;
+
+    Ok(())
+}
+
+/// 7. Get active context
+#[tauri::command]
+pub async fn get_active_context() -> Result<Option<ActiveContext>, String> {
+    read_active_context()
+}
+
+/// 8. Switch to global context
+#[tauri::command]
+pub async fn switch_to_global_context(store_id: String) -> Result<(), String> {
+    // First set the global config as using
+    set_using_config(store_id.clone()).await?;
+
+    // Update active context
+    let active_ctx = ActiveContext {
+        context_type: "global".to_string(),
+        id: store_id,
+        project_path: None,
+    };
+    write_active_context(Some(active_ctx))?;
+
+    Ok(())
+}
+
+/// 9. Auto-create project config from active global
+#[tauri::command]
+pub async fn auto_create_project_config(
+    project_path: String,
+) -> Result<ProjectConfigStore, String> {
+    // Check if config already exists
+    if let Some(existing) = read_project_config_file(&project_path)? {
+        return Ok(existing);
+    }
+
+    // Get current active global config
+    let current_store = get_current_store()
+        .await?
+        .ok_or("No active global config found")?;
+
+    // Extract project name from path
+    let project_name = PathBuf::from(&project_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Project")
+        .to_string();
+
+    // Create project config from global
+    create_project_config(
+        project_path,
+        project_name,
+        current_store.settings.clone(),
+        Some(current_store.id),
+    )
+    .await
+}
+
+/// 10. Get merged config for active context
+#[tauri::command]
+pub async fn get_active_merged_config() -> Result<Value, String> {
+    let active_ctx = read_active_context()?;
+
+    match active_ctx {
+        Some(ctx) if ctx.context_type == "project" => {
+            let project_path = ctx
+                .project_path
+                .ok_or("Project path missing from active context")?;
+            let config =
+                read_project_config_file(&project_path)?.ok_or("Project config not found")?;
+
+            if config.inherit_from_global {
+                if let Some(parent_id) = &config.parent_global_config_id {
+                    let stores = get_stores().await?;
+                    if let Some(parent) = stores.into_iter().find(|s| &s.id == parent_id) {
+                        return Ok(merge_settings(&parent.settings, &config.settings));
+                    }
+                }
+            }
+            Ok(config.settings)
+        }
+        Some(ctx) if ctx.context_type == "global" => {
+            let stores = get_stores().await?;
+            if let Some(store) = stores.into_iter().find(|s| s.id == ctx.id) {
+                Ok(store.settings)
+            } else {
+                Err("Active global config not found".to_string())
+            }
+        }
+        _ => {
+            // No active context - return current store settings
+            let current = get_current_store().await?;
+            if let Some(store) = current {
+                Ok(store.settings)
+            } else {
+                Ok(Value::Object(serde_json::Map::new()))
+            }
+        }
+    }
+}
+
+/// 11. Check if project has local .claude/settings.json
+#[tauri::command]
+pub async fn check_project_local_settings(project_path: String) -> Result<Option<Value>, String> {
+    check_project_local_settings_file(&project_path)
+}
+
+/// 12. Import from project's .claude/settings.json
+#[tauri::command]
+pub async fn import_project_local_settings(
+    project_path: String,
+) -> Result<ProjectConfigStore, String> {
+    // Read local settings
+    let local_settings =
+        check_project_local_settings_file(&project_path)?.ok_or("No local settings found")?;
+
+    // Get current active global config for parent reference
+    let current_store = get_current_store().await?;
+    let parent_id = current_store.map(|s| s.id);
+
+    // Extract project name from path
+    let project_name = PathBuf::from(&project_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Project")
+        .to_string();
+
+    let canonical_path = canonicalize_project_path(&project_path)?;
+    let id = nanoid::nanoid!(6);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| format!("Failed to get timestamp: {}", e))?
+        .as_secs();
+
+    let config = ProjectConfigStore {
+        project_path: project_path.clone(),
+        canonical_path,
+        id,
+        title: format!("{} (Imported)", project_name),
+        created_at: now,
+        last_used_at: 0,
+        settings: local_settings,
+        inherit_from_global: false, // Imported configs don't inherit by default
+        parent_global_config_id: parent_id,
+    };
+
+    write_project_config_file(&config)?;
+
+    Ok(config)
+}
+
+/// 13. Update project config path (for re-linking after rename/move)
+#[tauri::command]
+pub async fn update_project_config_path(
+    old_path: String,
+    new_path: String,
+) -> Result<ProjectConfigStore, String> {
+    // Read existing config
+    let mut config = read_project_config_file(&old_path)?.ok_or("Project config not found")?;
+
+    // Delete old config file
+    let old_hash = hash_project_path(&old_path)?;
+    let config_dir = get_project_configs_dir()?;
+    let old_config_file = config_dir.join(format!("{}.json", old_hash));
+    if old_config_file.exists() {
+        std::fs::remove_file(&old_config_file)
+            .map_err(|e| format!("Failed to delete old config file: {}", e))?;
+    }
+
+    // Update config with new path
+    config.project_path = new_path.clone();
+    config.canonical_path = canonicalize_project_path(&new_path)?;
+
+    // Write new config file
+    write_project_config_file(&config)?;
+
+    // Update active context if this was the active project
+    if let Some(mut active_ctx) = read_active_context()? {
+        if active_ctx.context_type == "project"
+            && active_ctx.project_path.as_ref() == Some(&old_path)
+        {
+            active_ctx.project_path = Some(new_path);
+            write_active_context(Some(active_ctx))?;
+        }
+    }
+
+    Ok(config)
+}
+
+/// 14. Add new project to ~/.claude.json (for projects not tracked yet)
+#[tauri::command]
+pub async fn add_project_to_tracking(project_path: String) -> Result<(), String> {
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    let claude_json_path = home_dir.join(".claude.json");
+
+    // Read existing .claude.json or create new structure
+    let mut json_value = if claude_json_path.exists() {
+        let content = std::fs::read_to_string(&claude_json_path)
+            .map_err(|e| format!("Failed to read .claude.json: {}", e))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse .claude.json: {}", e))?
+    } else {
+        Value::Object(serde_json::Map::new())
+    };
+
+    // Ensure projects object exists
+    let projects = json_value
+        .as_object_mut()
+        .unwrap()
+        .entry("projects".to_string())
+        .or_insert_with(|| Value::Object(serde_json::Map::new()))
+        .as_object_mut()
+        .ok_or("Projects is not an object")?;
+
+    // Add project if not exists
+    if !projects.contains_key(&project_path) {
+        projects.insert(
+            project_path,
+            serde_json::json!({
+                "allowedTools": [],
+                "history": []
+            }),
+        );
+
+        // Write back to file
+        let json_content = serde_json::to_string_pretty(&json_value)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+        std::fs::write(&claude_json_path, json_content)
+            .map_err(|e| format!("Failed to write .claude.json: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// 15. Check if project path exists (for startup validation)
+#[tauri::command]
+pub async fn validate_project_path(project_path: String) -> Result<bool, String> {
+    Ok(PathBuf::from(&project_path).exists())
+}
+
+/// 16. Get enterprise managed settings (read-only detection)
+#[tauri::command]
+pub async fn get_managed_settings() -> Result<Option<Value>, String> {
+    for path in get_managed_settings_paths() {
+        if path.exists() {
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read managed settings: {}", e))?;
+            let json: Value = serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse managed settings: {}", e))?;
+            return Ok(Some(json));
+        }
+    }
+    Ok(None)
+}
+
+/// 17. Get enterprise managed MCP servers (read-only detection)
+#[tauri::command]
+pub async fn get_managed_mcp_servers() -> Result<Option<Value>, String> {
+    for path in get_managed_mcp_paths() {
+        if path.exists() {
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read managed MCP: {}", e))?;
+            let json: Value = serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse managed MCP: {}", e))?;
+            return Ok(Some(json));
+        }
+    }
+    Ok(None)
 }
