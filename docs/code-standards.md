@@ -224,53 +224,103 @@ export function useGetProjectConfigs() {
 
 ### 3.5 React Hooks & Query
 
-**All API calls wrapped in React Query**:
+**Frontend Data Layer** (Phase 2 - 876 lines, 46 hooks):
+
+All API calls wrapped in React Query for:
+- **Query hooks** (read operations): useQuery, useSuspenseQuery
+- **Mutation hooks** (write operations): useMutation with onSuccess/onError callbacks
+- **Query invalidation**: Automatically refetch related data after mutations
+- **Error handling**: Toast notifications on success/error
+- **Loading states**: Managed by React Query
+
+**Pattern 1: Simple Query Hook**:
 
 ```typescript
 // src/lib/query.ts
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
-import type { ProjectConfigStore } from './types';
-
-/**
- * Fetch all project configurations.
- */
-export function useGetProjectConfigs() {
+export function useProjectConfigs() {
   return useQuery({
     queryKey: ['project-configs'],
-    queryFn: async () => {
-      const result = await invoke<ProjectConfigStore[]>('get_project_configs');
-      return result;
-    },
+    queryFn: () => invoke<ProjectConfigStore[]>('get_project_configs'),
   });
 }
 
-/**
- * Update a project configuration.
- */
+// In component
+const { data: configs, isLoading, error } = useProjectConfigs();
+```
+
+**Pattern 2: Query Hook with Parameters**:
+
+```typescript
+export function useProjectConfig(projectPath: string) {
+  return useQuery({
+    queryKey: ['project-config', projectPath],
+    queryFn: () =>
+      invoke<ProjectConfigStore | null>('get_project_config', { projectPath }),
+    enabled: !!projectPath,  // Only run when projectPath is provided
+  });
+}
+```
+
+**Pattern 3: Mutation Hook with Invalidation**:
+
+```typescript
 export function useUpdateProjectConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: UpdateProjectConfigParams) => {
-      return await invoke('update_project_config', {
-        projectPath: params.projectPath,
-        title: params.title,
-        settings: params.settings,
-      });
-    },
-    onSuccess: () => {
+    mutationFn: ({
+      projectPath,
+      title,
+      settings,
+    }: {
+      projectPath: string;
+      title: string;
+      settings: unknown;
+    }) =>
+      invoke<ProjectConfigStore>('update_project_config', {
+        projectPath,
+        title,
+        settings,
+      }),
+    onSuccess: (data) => {
+      toast.success(i18n.t('toast.projectConfigSaved', { title: data.title }));
+      // Invalidate related queries to refetch
       queryClient.invalidateQueries({ queryKey: ['project-configs'] });
+      queryClient.invalidateQueries({
+        queryKey: ['project-config', data.projectPath],
+      });
+      queryClient.invalidateQueries({ queryKey: ['active-context'] });
+    },
+    onError: (error) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      toast.error(
+        i18n.t('toast.projectConfigSaveFailed', { error: errorMessage }),
+      );
     },
   });
 }
+```
+
+**Pattern 4: Suspense Query** (for guaranteed data):
+
+```typescript
+export const useStores = () => {
+  return useSuspenseQuery({
+    queryKey: ['stores'],
+    queryFn: () => invoke<ConfigStore[]>('get_stores'),
+  });
+};
+
+// In component with Suspense boundary
+const { data: stores } = useStores();  // Data is guaranteed, no loading check needed
 ```
 
 **Usage in components**:
 
 ```typescript
 export function ProjectsPage() {
-  const { data: configs, isLoading, error } = useGetProjectConfigs();
+  const { data: configs, isLoading, error } = useProjectConfigs();
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
@@ -284,6 +334,16 @@ export function ProjectsPage() {
   );
 }
 ```
+
+**Hook Categories** (in query.ts):
+- **Global Config Hooks** (8): useStores, useCreateConfig, useUpdateConfig, etc.
+- **Project Config Hooks** (11): useProjectConfigs, useCreateProjectConfig, useActivateProjectConfig, etc.
+- **MCP Server Hooks** (5): useGlobalMcpServers, useUpdateGlobalMcpServer, etc.
+- **Memory & Commands** (6): useClaudeMemory, useClaudeCommands, useClaudeAgents, etc.
+- **Config Files** (3): useConfigFiles, useConfigFile, useWriteConfigFile
+- **Notifications & Misc** (13): useNotificationSettings, useCheckForUpdates, etc.
+
+**Total**: 46 React Query hooks covering all Tauri command bindings
 
 ### 3.6 Form Handling
 

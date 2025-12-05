@@ -1,8 +1,8 @@
 # CC Mate - Codebase Summary
 
 **Generated**: 2025-12-06
-**Version**: 1.0
-**Status**: Phase 1 Backend Foundation Complete
+**Version**: 1.1
+**Status**: Phase 1 Backend Foundation Complete + Phase 2 Frontend Data Layer Complete
 
 ---
 
@@ -211,17 +211,17 @@ changelog/
 - Command Palette, Skeleton, Sonner (toast)
 - Alert Dialog, Button Group, Native Select, Toggle, Tooltip
 
-**React Query Hooks** (lib/query.ts):
-- `useGetStores()` - Fetch global configurations
-- `useGetProjectConfigs()` - Fetch project configurations
-- `useCreateConfig()` - Create global config mutation
-- `useCreateProjectConfig()` - Create project config mutation
-- `useUpdateProjectConfig()` - Update project config mutation
-- `useDeleteProjectConfig()` - Delete project config mutation
-- `useActivateProjectConfig()` - Switch to project context
-- `useGetActiveContext()` - Get current active context
-- `useGetManagedSettings()` - Get enterprise settings
-- ... (30+ React Query hooks total)
+**React Query Hooks** (lib/query.ts - 876 lines, 46 hooks):
+
+Phase 2 Frontend Data Layer:
+- **Global Config Hooks** (8): useStores, useStore, useCurrentStore, useCreateConfig, useUpdateConfig, useDeleteConfig, useSetUsingConfig, useResetToOriginalConfig
+- **Project Config Hooks** (11): useProjectConfigs, useProjectConfig, useCreateProjectConfig, useUpdateProjectConfig, useDeleteProjectConfig, useActivateProjectConfig, useActiveContext, useSwitchToGlobalContext, useAutoCreateProjectConfig, useActiveMergedConfig, useCheckProjectLocalSettings
+- **MCP Server Hooks** (5): useGlobalMcpServers, useUpdateGlobalMcpServer, useAddGlobalMcpServer, useCheckMcpServerExists, useDeleteGlobalMcpServer
+- **Memory & Commands** (6): useClaudeMemory, useWriteClaudeMemory, useClaudeCommands, useWriteClaudeCommand, useDeleteClaudeCommand
+- **Config Files** (3): useConfigFiles, useConfigFile, useWriteConfigFile
+- **Agents** (3): useClaudeAgents, useWriteClaudeAgent, useDeleteClaudeAgent
+- **Projects & Analytics** (6): useClaudeProjects, useClaudeConfigFile, useWriteClaudeConfigFile, useProjectUsageFiles, useCheckForUpdates, useInstallAndRestart
+- **Notifications & Misc** (4): useNotificationSettings, useUpdateNotificationSettings, useBackupClaudeConfigs, useImportProjectLocalSettings
 
 ### Backend Commands (commands.rs - 2,922 lines)
 
@@ -529,7 +529,8 @@ pnpm build
 - **Total Lines**: ~3,000 lines
 - **Main Page**: ConfigEditorPage.tsx (~800 lines)
 - **React Components**: 30+ UI components
-- **React Query Hooks**: 30+ custom hooks
+- **React Query Hooks**: 46 custom hooks (876 lines in query.ts)
+- **Data Layer**: Phase 2 complete with ProjectConfigStore, ActiveContext types
 - **Utility Functions**: 15+ utility functions
 
 ### Backend
@@ -582,13 +583,18 @@ pnpm build
 - [x] Auto-import from local settings
 - [x] Enterprise managed settings detection
 
-### Phase 2: In Progress
+### Phase 2: Frontend Data Layer - Complete
 
-- [ ] Frontend UI for project configs
-- [ ] Project config editor
-- [ ] Context switching UI
-- [ ] Project list with sorting/filtering
-- [ ] Config inheritance visualization
+- [x] React Query hooks for all Tauri commands (46 hooks)
+- [x] ProjectConfigStore and ActiveContext TypeScript interfaces
+- [x] Query invalidation patterns with toast notifications
+- [x] Mutation patterns for config management
+- [x] Error handling with user-friendly messages
+- [ ] Frontend UI for project configs (Phase 3)
+- [ ] Project config editor (Phase 3)
+- [ ] Context switching UI (Phase 3)
+- [ ] Project list with sorting/filtering (Phase 3)
+- [ ] Config inheritance visualization (Phase 3)
 
 ### Phase 3: Planned
 

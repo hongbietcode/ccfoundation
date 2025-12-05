@@ -56,7 +56,7 @@ src/
 ├── components/
 │   └── ui/                   # shadcn/ui imported components
 ├── lib/
-│   ├── query.ts              # React Query hooks & Tauri API functions
+│   ├── query.ts              # React Query hooks & Tauri API functions (876 lines, 46 hooks)
 │   └── utils.ts              # Utility functions (formatting, validation, etc.)
 └── pages/                    # Route page components
 ```
@@ -70,20 +70,32 @@ All API calls to Tauri commands are wrapped in React Query for:
 - Background refetching
 - Loading/error state handling
 
+**Frontend Data Layer Stats** (Phase 2):
+- Total Hooks: 46 custom React Query hooks
+- Total Lines: 876 lines
+- Interfaces: ProjectConfigStore, ActiveContext, and 10+ supporting types
+- Patterns: Query (read) and Mutation (write) patterns
+
+**Hook Categories**:
+- Global Config Management: 8 hooks (useStores, useCreateConfig, useUpdateConfig, etc.)
+- Project Config Management: 11 hooks (useProjectConfigs, useCreateProjectConfig, useActivateProjectConfig, etc.)
+- MCP Server Management: 5 hooks (useGlobalMcpServers, useUpdateGlobalMcpServer, etc.)
+- Memory & Commands: 6 hooks (useClaudeMemory, useClaudeCommands, useClaudeAgents, etc.)
+- Config File Operations: 3 hooks (useConfigFiles, useConfigFile, useWriteConfigFile)
+- Notifications & Misc: 13 hooks (useNotificationSettings, useCheckForUpdates, useProjectUsageFiles, etc.)
+
 **Example Pattern**:
 ```typescript
 // src/lib/query.ts
-export function useGetProjectConfigs() {
+export function useProjectConfigs() {
   return useQuery({
     queryKey: ['project-configs'],
-    queryFn: async () => {
-      return await invoke('get_project_configs');
-    },
+    queryFn: () => invoke<ProjectConfigStore[]>('get_project_configs'),
   });
 }
 
 // In component
-const { data: configs, isLoading } = useGetProjectConfigs();
+const { data: configs, isLoading } = useProjectConfigs();
 ```
 
 ### 2.3 Form Handling
@@ -459,6 +471,95 @@ invoke('switch_to_global_context', { store_id: "abc123" })
 │  activeContext.type = "global"                          │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 4.5 Frontend Hooks API Reference
+
+### Global Configuration Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useStores()` | Query | - | Vec<ConfigStore> | List all global configs |
+| `useStore(storeId)` | Query | String | ConfigStore | Get specific config |
+| `useCurrentStore()` | Query | - | ConfigStore \| null | Get active config |
+| `useCreateConfig()` | Mutation | {title, settings} | ConfigStore | Create new config |
+| `useUpdateConfig()` | Mutation | {storeId, title, settings} | ConfigStore | Update config |
+| `useDeleteConfig()` | Mutation | storeId | void | Delete config |
+| `useSetUsingConfig()` | Mutation | storeId | void | Mark as active |
+| `useResetToOriginalConfig()` | Mutation | - | void | Restore from backup |
+
+### Project Configuration Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useProjectConfigs()` | Query | - | Vec<ProjectConfigStore> | List all project configs |
+| `useProjectConfig(path)` | Query | String | ProjectConfigStore \| null | Get project config |
+| `useCreateProjectConfig()` | Mutation | {path, title, settings, parentId} | ProjectConfigStore | Create project config |
+| `useUpdateProjectConfig()` | Mutation | {path, title, settings} | ProjectConfigStore | Update project config |
+| `useDeleteProjectConfig()` | Mutation | path | void | Delete project config |
+| `useActivateProjectConfig()` | Mutation | path | void | Switch to project |
+| `useAutoCreateProjectConfig()` | Mutation | path | ProjectConfigStore | Auto-create from global |
+| `useActiveContext()` | Query | - | ActiveContext \| null | Get current context |
+| `useSwitchToGlobalContext()` | Mutation | storeId | void | Switch to global |
+| `useActiveMergedConfig()` | Query | - | unknown | Get merged config |
+| `useCheckProjectLocalSettings()` | Query | path | unknown \| null | Check local settings |
+
+### MCP Server Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useGlobalMcpServers()` | Query | - | Record<string, McpServer> | Get MCP servers |
+| `useUpdateGlobalMcpServer()` | Mutation | {name, config} | void | Create/update MCP |
+| `useAddGlobalMcpServer()` | Mutation | {name, config} | void | Add MCP server |
+| `useDeleteGlobalMcpServer()` | Mutation | name | void | Delete MCP |
+| `useCheckMcpServerExists()` | Query | name | bool | Check if exists |
+
+### Memory, Commands, & Agents Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useClaudeMemory()` | Query | - | MemoryFile | Read CLAUDE.md |
+| `useWriteClaudeMemory()` | Mutation | content | void | Write CLAUDE.md |
+| `useClaudeCommands()` | Query | - | Vec<CommandFile> | List commands |
+| `useWriteClaudeCommand()` | Mutation | {name, content} | void | Create/update command |
+| `useDeleteClaudeCommand()` | Mutation | name | void | Delete command |
+| `useClaudeAgents()` | Query | - | Vec<CommandFile> | List agents |
+| `useWriteClaudeAgent()` | Mutation | {name, content} | void | Create/update agent |
+| `useDeleteClaudeAgent()` | Mutation | name | void | Delete agent |
+
+### Config File Operations Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useConfigFiles()` | Query | - | Vec<ConfigType> | List all config types |
+| `useConfigFile(type)` | Query | ConfigType | ConfigFile | Get config file |
+| `useWriteConfigFile()` | Mutation | {type, content} | void | Write config file |
+| `useBackupClaudeConfigs()` | Mutation | - | void | Backup configs |
+
+### Project & Analytics Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useClaudeProjects()` | Query | - | Vec<ProjectConfig> | List projects |
+| `useClaudeConfigFile()` | Query | - | ClaudeConfigFile | Read .claude.json |
+| `useWriteClaudeConfigFile()` | Mutation | content | void | Write .claude.json |
+| `useProjectUsageFiles()` | Query | - | Vec<ProjectUsageRecord> | Get usage analytics |
+| `useCheckForUpdates()` | Query | - | UpdateInfo | Check updates |
+| `useInstallAndRestart()` | Mutation | - | void | Install update |
+
+### Notification Settings Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useNotificationSettings()` | Query | - | NotificationSettings \| null | Get settings |
+| `useUpdateNotificationSettings()` | Mutation | settings | void | Update settings |
+
+### Import & Migration Hooks
+
+| Hook | Type | Input | Output | Purpose |
+|------|------|-------|--------|---------|
+| `useImportProjectLocalSettings()` | Mutation | path | ProjectConfigStore | Import local settings |
 
 ---
 
