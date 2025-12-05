@@ -1,15 +1,9 @@
+use axum::{extract::Json, http::StatusCode, response::IntoResponse, routing::post, Router};
 use serde_json::Value;
-use axum::{
-    extract::Json,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::post,
-    Router,
-};
-use tower_http::cors::{Any, CorsLayer};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tauri_plugin_notification::NotificationExt;
+use tower_http::cors::{Any, CorsLayer};
 
 // Hook event data structure
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -52,13 +46,23 @@ fn create_hook_app(app_handle: tauri::AppHandle) -> Router {
     let shared_handle = Arc::new(app_handle);
 
     Router::new()
-        .route("/claude_code/hooks", post(move |payload| handle_hook_event(payload, shared_handle.clone())))
+        .route(
+            "/claude_code/hooks",
+            post(move |payload| handle_hook_event(payload, shared_handle.clone())),
+        )
         .layer(cors)
 }
 
-async fn handle_hook_event(Json(payload): Json<HookEvent>, app_handle: Arc<tauri::AppHandle>) -> impl IntoResponse {
+async fn handle_hook_event(
+    Json(payload): Json<HookEvent>,
+    app_handle: Arc<tauri::AppHandle>,
+) -> impl IntoResponse {
     println!("📥 Received hook event: {}", payload.hook_event_name);
-    println!("📄 Hook data: {}", serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "Failed to serialize".to_string()));
+    println!(
+        "📄 Hook data: {}",
+        serde_json::to_string_pretty(&payload)
+            .unwrap_or_else(|_| "Failed to serialize".to_string())
+    );
 
     // Check notification settings before sending notification
     if let Ok(Some(settings)) = crate::commands::get_notification_settings().await {
@@ -66,7 +70,10 @@ async fn handle_hook_event(Json(payload): Json<HookEvent>, app_handle: Arc<tauri
             // Send notification based on the hook event
             send_hook_notification(&payload, &app_handle).await;
         } else {
-            println!("🔕 Hook '{}' is not enabled in notification settings, skipping notification", payload.hook_event_name);
+            println!(
+                "🔕 Hook '{}' is not enabled in notification settings, skipping notification",
+                payload.hook_event_name
+            );
         }
     } else {
         println!("⚠️ Could not get notification settings, defaulting to sending notification");
@@ -81,9 +88,7 @@ async fn handle_hook_event(Json(payload): Json<HookEvent>, app_handle: Arc<tauri
 async fn send_hook_notification(event: &HookEvent, app_handle: &tauri::AppHandle) {
     let title = "Claude Code";
     let description = match event.hook_event_name.as_str() {
-        "Stop" => {
-            "Task completed successfully".to_string()
-        }
+        "Stop" => "Task completed successfully".to_string(),
         "PreToolUse" => {
             if let Some(tool_name) = event.extra.get("tool_name").and_then(|v| v.as_str()) {
                 format!("🔨 Using {} tool", tool_name)
@@ -98,13 +103,12 @@ async fn send_hook_notification(event: &HookEvent, app_handle: &tauri::AppHandle
                 "Received notification".to_string()
             }
         }
-        _ => {
-            "Hook event received".to_string()
-        }
+        _ => "Hook event received".to_string(),
     };
 
     // Send notification using Tauri notification plugin
-    match app_handle.notification()
+    match app_handle
+        .notification()
         .builder()
         .title(title)
         .body(&description)

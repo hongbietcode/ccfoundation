@@ -116,7 +116,13 @@ pub async fn build_tray_menu<R: Runtime>(
                 builder = builder.item(&separator);
 
                 // Add "Configs" label
-                let configs_label = tauri::menu::MenuItem::with_id(app, "configs_label", "Configs", false, None::<&str>)?;
+                let configs_label = tauri::menu::MenuItem::with_id(
+                    app,
+                    "configs_label",
+                    "Configs",
+                    false,
+                    None::<&str>,
+                )?;
                 builder = builder.item(&configs_label);
 
                 // Add config items

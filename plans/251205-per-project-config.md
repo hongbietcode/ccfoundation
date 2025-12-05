@@ -1,8 +1,8 @@
 # Per-Project Configuration for CC Mate
 
 **Date**: 2024-12-05
-**Status**: Phase 1 Complete, Phase 2 In Progress
-**Progress**: 30% Complete (Backend Foundation Done, Frontend Next)
+**Status**: Phase 2 Complete, Phase 3 Next
+**Progress**: 40% Complete (Backend + Frontend Data Layer Done, UI Next)
 **Estimate**: 10-12 days
 **Updated**: 2025-12-06
 
@@ -798,17 +798,47 @@ export const useSetUsingConfig = () => {
 - `src-tauri/src/commands.rs` (2300+ lines added)
 - `src-tauri/src/lib.rs` (command registration)
 
-### Phase 2: Frontend Data Layer (2 days)
+### Phase 2: Frontend Data Layer (2 days) - ✅ COMPLETED
 
-**Tasks:**
-1. Add TypeScript interfaces to query.ts
-2. Implement all new React Query hooks (including auto-import hooks)
-3. Update useSetUsingConfig to invalidate active-context
-4. Test hooks with mock data
-5. Add error handling và toast messages
+**Status:** ✅ COMPLETED
+**Date:** 2025-12-06
+**Duration:** ~2 hours
+**Files modified:** 1
+**Code review:** APPROVED (see `reports/code-reviewer-251206-phase2-frontend.md`)
+
+**Implementation Details:**
+- 2 TypeScript interfaces added (ProjectConfigStore, ActiveContext)
+- 11 React Query hooks implemented:
+  1. useProjectConfigs
+  2. useProjectConfig
+  3. useCreateProjectConfig
+  4. useUpdateProjectConfig
+  5. useDeleteProjectConfig
+  6. useActivateProjectConfig
+  7. useActiveContext
+  8. useSwitchToGlobalContext
+  9. useAutoCreateProjectConfig
+  10. useActiveMergedConfig
+  11. useCheckProjectLocalSettings
+  12. useImportProjectLocalSettings
+- Updated useSetUsingConfig() to invalidate active-context query
+- All mutations include error handling + toast messages
+- TypeScript strict mode compliance verified
+- Build successful (0 errors)
+
+**Completed Tasks:**
+1. ✅ Add TypeScript interfaces to query.ts (Lines 57-74)
+2. ✅ Implement all new React Query hooks (11 hooks, lines 641-867)
+3. ✅ Update useSetUsingConfig to invalidate active-context (Line 217)
+4. ⏳ Test hooks with mock data (Deferred to Phase 4 integration testing)
+5. ✅ Add error handling and toast messages (All mutations have onError + toast)
+
+**Known Issues:**
+- 14 i18n keys missing in locale files (to be added in Phase 3)
+- No integration tests yet (Phase 4)
 
 **Files:**
-- `src/lib/query.ts`
+- `src/lib/query.ts` (+250 lines)
 
 ### Phase 3: UI Components (3-4 days)
 

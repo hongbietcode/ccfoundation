@@ -54,6 +54,25 @@ export interface CommandFile {
 	exists: boolean;
 }
 
+// Per-Project Configuration interfaces
+export interface ProjectConfigStore {
+	projectPath: string;
+	canonicalPath: string;
+	id: string;
+	title: string;
+	createdAt: number;
+	lastUsedAt: number;
+	settings: unknown;
+	inheritFromGlobal: boolean;
+	parentGlobalConfigId: string | null;
+}
+
+export interface ActiveContext {
+	type: "global" | "project";
+	id: string;
+	projectPath: string | null;
+}
+
 export const useConfigFiles = () => {
 	return useQuery({
 		queryKey: ["config-files"],
@@ -195,6 +214,7 @@ export const useSetUsingConfig = () => {
 			queryClient.invalidateQueries({ queryKey: ["stores"] });
 			queryClient.invalidateQueries({ queryKey: ["current-store"] });
 			queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
 		},
 		onError: (error) => {
 			const errorMessage =
@@ -612,6 +632,236 @@ export const useDeleteClaudeAgent = () => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
 			toast.error(`Failed to delete agent: ${errorMessage}`);
+		},
+	});
+};
+
+// Per-Project Configuration hooks
+
+export const useProjectConfigs = () => {
+	return useQuery({
+		queryKey: ["project-configs"],
+		queryFn: () => invoke<ProjectConfigStore[]>("get_project_configs"),
+	});
+};
+
+export const useProjectConfig = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-config", projectPath],
+		queryFn: () =>
+			invoke<ProjectConfigStore | null>("get_project_config", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useCreateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			title,
+			settings,
+			parentGlobalConfigId,
+		}: {
+			projectPath: string;
+			title: string;
+			settings: unknown;
+			parentGlobalConfigId: string | null;
+		}) =>
+			invoke<ProjectConfigStore>("create_project_config", {
+				projectPath,
+				title,
+				settings,
+				parentGlobalConfigId,
+			}),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigCreated"));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigCreateFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useUpdateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({
+			projectPath,
+			title,
+			settings,
+		}: {
+			projectPath: string;
+			title: string;
+			settings: unknown;
+		}) =>
+			invoke<ProjectConfigStore>("update_project_config", {
+				projectPath,
+				title,
+				settings,
+			}),
+		onSuccess: (data) => {
+			toast.success(i18n.t("toast.projectConfigSaved", { title: data.title }));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-config", data.projectPath],
+			});
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigSaveFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useDeleteProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<void>("delete_project_config", { projectPath }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigDeleted"));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigDeleteFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useActivateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<void>("activate_project_config", { projectPath }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.projectConfigActivated"));
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+			queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigActivateFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useActiveContext = () => {
+	return useQuery({
+		queryKey: ["active-context"],
+		queryFn: () => invoke<ActiveContext | null>("get_active_context"),
+	});
+};
+
+export const useSwitchToGlobalContext = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (storeId: string) =>
+			invoke<void>("switch_to_global_context", { storeId }),
+		onSuccess: () => {
+			toast.success(i18n.t("toast.switchedToGlobal"));
+			queryClient.invalidateQueries({ queryKey: ["stores"] });
+			queryClient.invalidateQueries({ queryKey: ["active-context"] });
+			queryClient.invalidateQueries({ queryKey: ["config-file", "user"] });
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.switchToGlobalFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useAutoCreateProjectConfig = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<ProjectConfigStore>("auto_create_project_config", { projectPath }),
+		onSuccess: (data) => {
+			toast.success(
+				i18n.t("toast.projectConfigAutoCreated", { title: data.title }),
+			);
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-config", data.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigAutoCreateFailed", { error: errorMessage }),
+			);
+		},
+	});
+};
+
+export const useActiveMergedConfig = () => {
+	return useQuery({
+		queryKey: ["active-merged-config"],
+		queryFn: () => invoke<unknown>("get_active_merged_config"),
+	});
+};
+
+export const useCheckProjectLocalSettings = (projectPath: string) => {
+	return useQuery({
+		queryKey: ["project-local-settings", projectPath],
+		queryFn: () =>
+			invoke<unknown | null>("check_project_local_settings", { projectPath }),
+		enabled: !!projectPath,
+	});
+};
+
+export const useImportProjectLocalSettings = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (projectPath: string) =>
+			invoke<ProjectConfigStore>("import_project_local_settings", {
+				projectPath,
+			}),
+		onSuccess: (data) => {
+			toast.success(
+				i18n.t("toast.projectConfigImported", { title: data.title }),
+			);
+			queryClient.invalidateQueries({ queryKey: ["project-configs"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-config", data.projectPath],
+			});
+		},
+		onError: (error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			toast.error(
+				i18n.t("toast.projectConfigImportFailed", { error: errorMessage }),
+			);
 		},
 	});
 };
