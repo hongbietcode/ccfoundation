@@ -1,16 +1,16 @@
 # CC Foundation - Project Overview & Product Development Requirements
 
 **Last Updated**: 2025-12-06
-**Version**: 1.0
-**Status**: Phase 1 (Backend Foundation) Complete, Phase 2 (Frontend) In Progress
+**Version**: 1.1
+**Status**: Phase 1 (Backend Foundation + Chat Interface) Complete, Phase 2 (Frontend) In Progress
 
 ---
 
 ## Executive Summary
 
-CC Foundation is a modern desktop application for managing Claude Code configuration files across multiple contexts (global, enterprise, and per-project). Built with Tauri 2, React 19, and Rust, it provides an intuitive UI to configure, organize, and switch between different Claude Code configurations without manual file editing.
+CC Foundation is a modern desktop application for managing Claude Code configuration files and enabling interactive chat sessions across multiple contexts (global, enterprise, and per-project). Built with Tauri 2, React 19, and Rust, it provides an intuitive UI to configure, organize, switch between different Claude Code configurations, and chat directly with Claude via CLI integration without manual file editing.
 
-**Current Milestone**: Phase 1 Backend Foundation - Per-project configuration storage and management system complete.
+**Current Milestone**: Phase 1 Complete - Backend infrastructure for per-project configuration storage, management system, and Claude Code chat interface with streaming support.
 
 ---
 
@@ -28,6 +28,8 @@ Enable developers to seamlessly manage Claude Code configurations across:
 
 -   **Multi-Configuration Support**: Switch between multiple named Claude Code configurations
 -   **Per-Project Configuration**: Project-specific settings with inheritance from global configs
+-   **Claude Code Chat Interface**: Interactive chat sessions with streaming support via Claude CLI
+-   **Chat Session Management**: Create, organize, and persist chat conversations per project
 -   **MCP Server Management**: Configure and manage Model Context Protocol servers
 -   **Agent Management**: Manage Claude Code agents and their settings
 -   **Global Commands**: Define organization-wide slash commands
@@ -49,7 +51,9 @@ Enable developers to seamlessly manage Claude Code configurations across:
 
 ## 2. Phase 1: Backend Foundation (Complete)
 
-### 2.1 Completed Work
+### 2.1 Phase 1a: Backend Foundation (Project Configuration)
+
+**Completed Work**:
 
 **Added Dependencies**:
 
@@ -88,6 +92,120 @@ Enable developers to seamlessly manage Claude Code configurations across:
 -   Deep merge logic with special handling for permission arrays
 -   Enterprise managed settings detection (macOS, Linux, Windows)
 -   Active context persistence in stores.json
+
+### 2.1b: Chat Interface Backend Infrastructure (Phase 1)
+
+**Completed Work**:
+
+**New Modules**:
+
+-   `src-tauri/src/chat/mod.rs` - Chat module exports and initialization
+-   `src-tauri/src/chat/session.rs` - Data structures for chat sessions and messages
+-   `src-tauri/src/chat/storage.rs` - File-based persistence for chat sessions
+-   `src-tauri/src/chat/claude_cli.rs` - CLI spawning, stream parsing, and process management
+-   `src-tauri/src/chat/commands.rs` - 9 Tauri commands for chat operations
+-   `src-tauri/src/chat/tests.rs` - 27 unit tests covering all chat functionality
+-   `src/lib/chat-query.ts` - React Query hooks for frontend chat operations
+
+**Added Dependencies**:
+
+-   `tokio = { version = "1", features = ["time", "process", "io-util"] }` - Async runtime and process spawning
+-   `uuid = { version = "1.0", features = ["v4", "serde"] }` - UUID generation for sessions and messages
+-   `tempfile = "3"` - Temp file support for testing
+
+**Data Structures**:
+
+-   `ChatSession` - Metadata for chat conversations (id, project_path, title, timestamps, message count)
+-   `ChatMessage` - Individual messages with role (User/Assistant/System/Tool) and optional tool use data
+-   `ChatConfig` - Configuration for chat execution (model, permission mode, max tokens, temperature)
+-   `MessageRole` - Enum for message origins
+-   `ToolUse` - Structure for Claude tool invocations
+
+**Implemented Tauri Commands (9 total)**:
+
+1. `chat_check_claude_installed()` - Verify Claude CLI installation
+2. `chat_create_session(project_path, title)` - Create new chat session
+3. `chat_get_sessions(project_path)` - List all sessions for a project
+4. `chat_get_messages(session_id)` - Load messages from a session
+5. `chat_delete_session(session_id)` - Remove a session and its messages
+6. `chat_send_message(session_id, message, config)` - Send user message and stream Claude response
+7. `chat_cancel_stream(session_id)` - Stop active stream processing
+8. `chat_save_assistant_message(session_id, content)` - Persist assistant response
+9. `chat_update_session_title(session_id, title)` - Rename session
+
+**Key Implementation Features**:
+
+-   **Claude CLI Integration**: Spawns `claude -p --output-format stream-json` process
+-   **Stream Processing**: Parses JSONL stream line-by-line for real-time responses
+-   **Event Emission**: Sends Tauri events for frontend updates during streaming
+-   **Session Persistence**: Stores sessions in `~/.ccconfig/chat-sessions/{session-id}/`
+-   **Process Management**: Tracks and cleans up stream processes (prevents zombie processes)
+-   **Model Validation**: Whitelist check for models (sonnet, opus, haiku)
+-   **Path Validation**: Ensures project paths are absolute and canonicalized
+-   **Session ID Validation**: UUID format validation to prevent path traversal attacks
+
+**Architecture**:
+
+```
+Chat Request Flow:
+┌─────────────┐
+│   Frontend  │ Sends chat_send_message with user input
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────────┐
+│ chat_send_message()  │ Validates input, saves user message
+└──────┬───────────────┘
+       │
+       ▼
+┌──────────────────────────┐
+│ spawn_claude_stream()    │ Spawns: claude -p --output-format stream-json
+└──────┬───────────────────┘
+       │
+       ▼
+┌──────────────────────────┐
+│ Parse JSONL Stream       │ Reads: {"type": "text", "content": "..."} lines
+└──────┬───────────────────┘
+       │
+       ▼
+┌──────────────────────────┐
+│ Emit Tauri Event         │ Broadcasts content to frontend: chat-stream:{sessionId}
+└──────┬───────────────────┘
+       │
+       ▼
+┌──────────────────────────┐
+│ Save Assistant Message   │ Persists complete response to session file
+└──────────────────────────┘
+```
+
+**Storage Structure**:
+
+```
+~/.ccconfig/chat-sessions/
+├── {session-id}/
+│   ├── session.json       # ChatSession metadata
+│   └── messages.json      # Array of ChatMessage objects
+```
+
+**Security & Validation**:
+
+-   Model whitelist: ["sonnet", "opus", "haiku"]
+-   Absolute path requirement for project_path
+-   Canonical path resolution (symlinks resolved)
+-   UUID validation for session IDs
+-   Session ID isolation (prevents directory traversal)
+-   Guaranteed process cleanup on cancel/completion
+
+**Testing Coverage** (27 unit tests):
+
+-   Session creation and loading
+-   Message persistence and retrieval
+-   CLI installation check
+-   Stream spawning and cancellation
+-   JSONL parsing from Claude output
+-   Model validation
+-   Path canonicalization
+-   Error handling and cleanup
 
 ### 2.2 Architecture Details
 

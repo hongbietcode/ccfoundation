@@ -383,9 +383,324 @@ merge_settings(global, project) -> Value
 
 ---
 
-## 4. Data Flow Diagrams
+## 4. Chat Interface Module (Phase 1)
 
-### 4.1 Project Config Creation Flow
+### 4.0 Chat Module Organization
+
+**File Structure**:
+
+```
+src-tauri/src/chat/
+├── mod.rs              # Module exports and initialization
+├── session.rs          # Data structures (ChatSession, ChatMessage, ChatConfig)
+├── storage.rs          # File-based persistence operations
+├── claude_cli.rs       # CLI spawning, stream parsing, process management
+├── commands.rs         # 9 Tauri commands for chat operations
+└── tests.rs            # 27 unit tests
+
+src/lib/chat-query.ts   # React Query hooks for frontend
+```
+
+**Integration Points**:
+
+-   `src-tauri/src/lib.rs`: Initializes `StreamProcesses` state and registers chat commands
+-   `src-tauri/Cargo.toml`: Adds tokio (async), uuid (session IDs), tempfile (testing)
+-   `src/lib/chat-query.ts`: Wraps all chat commands in React Query hooks
+
+### 4.1 Data Structures
+
+**ChatSession** (session.rs):
+
+```rust
+pub struct ChatSession {
+    pub id: String,                    // UUID v4
+    pub project_path: String,          // Absolute project path
+    pub title: String,                 // User-friendly name
+    pub created_at: u64,               // Unix timestamp
+    pub updated_at: u64,               // Unix timestamp
+    pub message_count: usize,          // Number of messages in session
+}
+```
+
+**ChatMessage** (session.rs):
+
+```rust
+pub struct ChatMessage {
+    pub id: String,                    // UUID v4
+    pub session_id: String,            // Parent session ID
+    pub role: MessageRole,             // User|Assistant|System|Tool
+    pub content: String,               // Message text
+    pub timestamp: u64,                // Unix timestamp
+    pub tool_use: Option<ToolUse>,     // Optional tool invocation data
+    pub metadata: Option<Value>,       // Optional metadata (streaming, etc)
+}
+
+pub enum MessageRole {
+    User,
+    Assistant,
+    System,
+    Tool,
+}
+```
+
+**ToolUse** (session.rs):
+
+```rust
+pub struct ToolUse {
+    pub tool_name: String,             // Name of tool (e.g., "bash")
+    pub input: Value,                  // Tool input/parameters
+    pub output: Option<String>,        // Optional tool output
+}
+```
+
+**ChatConfig** (session.rs):
+
+```rust
+pub struct ChatConfig {
+    pub model: String,                 // sonnet|opus|haiku (validated)
+    pub permission_mode: PermissionMode,  // default|acceptEdits|bypassPermissions|plan
+    pub max_tokens: Option<u32>,       // Optional token limit
+    pub temperature: Option<f32>,      // Optional temperature setting
+}
+
+pub enum PermissionMode {
+    Default,
+    AcceptEdits,
+    BypassPermissions,
+    Plan,
+}
+```
+
+### 4.2 Storage Module (storage.rs)
+
+**Storage Location**:
+
+```
+~/.ccconfig/chat-sessions/
+├── {uuid-session-id}/
+│   ├── session.json      # ChatSession metadata
+│   └── messages.json     # Vec<ChatMessage>
+```
+
+**Key Functions**:
+
+-   `save_session(session, messages)` - Create or update session with messages
+-   `load_session(session_id)` - Load session metadata and all messages
+-   `list_sessions(project_path)` - List all sessions for a project (sorted by updated_at)
+-   `delete_session(session_id)` - Remove session directory
+-   `update_session_metadata(session)` - Update only session.json (timestamps, title)
+
+### 4.3 Claude CLI Module (claude_cli.rs)
+
+**Process Spawning**:
+
+```rust
+pub type StreamProcesses = Arc<Mutex<HashMap<String, tokio::process::Child>>>;
+
+pub async fn spawn_claude_stream(
+    app: AppHandle,
+    session_id: String,
+    message: String,
+    project_path: String,
+    model: String,
+    processes: StreamProcesses,
+) -> Result<(), String>
+```
+
+**Command Executed**:
+
+```bash
+claude -p --output-format stream-json
+# Input: User message sent via stdin
+# Output: JSONL stream of response chunks
+```
+
+**Stream Format** (JSONL - one object per line):
+
+```json
+{"type": "text", "content": "Hello, I can help"}
+{"type": "text", "content": " with that!"}
+{"type": "tool_use", "name": "bash", "input": {"command": "ls"}}
+{"type": "tool_result", "content": "file1.txt\nfile2.txt"}
+```
+
+**Process Management**:
+
+-   Tracks running processes by session ID
+-   Reads stdout line-by-line via BufReader
+-   Emits Tauri events for each chunk: `chat-stream:{sessionId}`
+-   Cleans up process on completion or cancellation
+
+**Validation**:
+
+-   `check_claude_installed()` - Verifies claude CLI in PATH
+-   Model whitelist: sonnet, opus, haiku (prevents arbitrary models)
+-   Path canonicalization: resolves symlinks
+-   UUID session ID format validation
+
+### 4.4 Tauri Commands (commands.rs)
+
+#### Command Reference
+
+1. **chat_check_claude_installed() → Result<bool, String>**
+
+   - Check if Claude CLI is available in PATH
+   - Runs `claude --version` silently
+
+2. **chat_create_session(project_path, title?) → Result<ChatSession, String>**
+
+   - Create new session for project
+   - Generates UUID, timestamps
+   - Saves empty session file
+   - Returns created session object
+   - Error if project_path not absolute
+
+3. **chat_get_sessions(project_path) → Result<Vec<ChatSession>, String>**
+
+   - List all sessions for a project
+   - Sorted by updated_at (most recent first)
+   - Error if project not found
+
+4. **chat_get_messages(session_id) → Result<Vec<ChatMessage>, String>**
+
+   - Load all messages from session
+   - Returns empty array if session empty
+   - Error if session not found
+
+5. **chat_delete_session(session_id) → Result<(), String>**
+
+   - Remove session directory and all contents
+   - Silent success if already deleted
+
+6. **chat_send_message(session_id, message, config?) → Result<(), String>**
+
+   - Primary command for user messages
+   - Validates input not empty
+   - Saves user message to session
+   - Spawns Claude CLI stream in background
+   - Emits `chat-stream:{sessionId}` events
+   - Returns immediately (streaming continues asynchronously)
+   - Optional ChatConfig overrides default
+
+7. **chat_cancel_stream(session_id) → Result<(), String>**
+
+   - Kill running stream process for session
+   - Cleans up process handle
+   - Safe to call if no process running
+
+8. **chat_save_assistant_message(session_id, content) → Result<(), String>**
+
+   - Save complete assistant response to session
+   - Updates message_count and updated_at
+   - Called after streaming completes
+   - Content is full accumulated response
+
+9. **chat_update_session_title(session_id, title) → Result<(), String>**
+
+   - Rename session for UI display
+   - Updates session.json
+   - Updates updated_at timestamp
+
+#### Error Handling
+
+All commands return `Result<T, String>` with descriptive error messages:
+
+-   "Session not found" - Invalid or deleted session ID
+-   "Invalid project path" - Non-absolute or non-existent path
+-   "Claude CLI not installed" - Missing claude command
+-   "Invalid model" - Model not in whitelist
+-   "Failed to parse stream" - JSONL parse error
+-   "I/O error" - File system issues
+
+### 4.5 Frontend Integration (chat-query.ts)
+
+**React Query Hooks** (7 hooks):
+
+```typescript
+// Query hooks
+useCheckClaudeInstalled()        // Check CLI availability
+useGetChatSessions(projectPath)  // List sessions
+useGetChatMessages(sessionId)    // Load messages
+
+// Mutation hooks
+useCreateChatSession()           // Create new session
+useDeleteChatSession()           // Remove session
+useSendChatMessage()             // Send message + stream
+useCancelChatStream()            // Stop streaming
+useSaveAssistantMessage()        // Persist response
+useUpdateChatSessionTitle()      // Rename session
+```
+
+**Event Streaming**:
+
+```typescript
+const unsubscribe = listen<string>(
+  `chat-stream:${sessionId}`,
+  (event) => {
+    // Handle streaming content
+    const content = event.payload;
+    // Update UI in real-time
+  }
+);
+```
+
+**Query Key Structure**:
+
+```typescript
+["claude-installed"]                      // CLI check
+["chat-sessions", projectPath]           // Sessions list
+["chat-messages", sessionId]             // Messages for session
+```
+
+### 4.6 Data Flow
+
+```
+Frontend                          Backend                          File System
+───────────────────────────────────────────────────────────────────────────────
+
+User types message & sends
+    │
+    ▼
+chat_send_message(sessionId, msg)
+    │
+    ├──────────────────────────────────► Validate input
+    │                                   Canonicalize path
+    │                                   Load session file
+    │
+    │                                   Save user message
+    │                                   Save to session.json  ────► session.json
+    │
+    │                                   Spawn process:
+    │                                   claude -p --output-format stream-json
+    │
+    ◄──────────────────────────────────┐
+    │                                   │
+    │                                   └─ Read JSONL stream line by line
+    │                                      Parse {"type": "text", "content": "..."}
+    │
+Listen for chat-stream:{sessionId}      │
+    │                                   │
+    ▼◄──────────────────────────────────┘
+    │
+Update UI with content                  Accumulate full response
+    │                                   │
+    │                                   └─ Send remaining events
+    │                                   │  as stream completes
+    │
+User calls save when done
+    │
+    ▼
+chat_save_assistant_message(sessionId, fullContent)
+    │
+    └──────────────────────────────────► Save assistant message
+                                        Save to messages.json  ───► messages.json
+```
+
+---
+
+## 5. Data Flow Diagrams
+
+### 5.1 Project Config Creation Flow
 
 ```
 Frontend (React)

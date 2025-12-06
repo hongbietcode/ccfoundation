@@ -9,6 +9,7 @@ import { ContextSelectorPage } from "./pages/ContextSelectorPage";
 import { MCPPage } from "./pages/MCPPage";
 import { MemoryPage } from "./pages/MemoryPage";
 import { UsagePage } from "./pages/UsagePage";
+import { SessionsPage } from "./pages/SessionsPage";
 
 const router = createBrowserRouter([
 	// Root: Context Selector (chọn Global hoặc Project)
@@ -141,6 +142,14 @@ const router = createBrowserRouter([
 				element: (
 					<RouteWrapper>
 						<CommandsPage />
+					</RouteWrapper>
+				),
+			},
+			{
+				path: "sessions",
+				element: (
+					<RouteWrapper>
+						<SessionsPage />
 					</RouteWrapper>
 				),
 			},

@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "defaultModel": "claude-sonnet-4-5-20250929",
+  "models": [
+    {
+      "id": "claude-sonnet-4-5-20250929",
+      "displayName": "Claude Sonnet 4.5",
+      "family": "sonnet",
+      "releaseDate": "2025-09-29",
+      "aliases": [
+        "sonnet",
+        "claude-sonnet",
+        "claude-sonnet-4",
+        "claude-sonnet-4-5"
+      ]
+    },
+    {
+      "id": "claude-opus-4-5-20251101",
+      "displayName": "Claude Opus 4.5",
+      "family": "opus",
+      "releaseDate": "2025-11-01",
+      "aliases": [
+        "opus",
+        "claude-opus",
+        "claude-opus-4",
+        "claude-opus-4-5"
+      ]
+    },
+    {
+      "id": "claude-3-5-haiku-20241022",
+      "displayName": "Claude Haiku 3.5",
+      "family": "haiku",
+      "releaseDate": "2024-10-22",
+      "aliases": [
+        "haiku",
+        "claude-haiku",
+        "claude-haiku-3",
+        "claude-haiku-3-5",
+        "claude-3-5-haiku"
+      ]
+    }
+  ]
+}

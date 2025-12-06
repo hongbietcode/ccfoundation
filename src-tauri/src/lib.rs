@@ -1,5 +1,7 @@
 mod commands;
 mod hook_server;
+mod models;
+mod sessions;
 mod tray;
 
 use commands::*;
@@ -15,7 +17,11 @@ pub fn run() {
     #[cfg(debug_assertions)]
     let builder = tauri::Builder::default();
 
+    // Initialize sessions running processes state
+    let session_processes = sessions::resume::init_running_processes();
+
     builder
+        .manage(session_processes)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -244,7 +250,21 @@ pub fn run() {
             write_project_mcp,
             get_project_registry,
             update_project_registry,
-            delete_project_config
+            delete_project_config,
+            // Sessions commands
+            sessions::session_check_claude_installed,
+            sessions::session_list,
+            sessions::session_get,
+            sessions::session_get_messages,
+            sessions::session_create,
+            sessions::session_resume,
+            sessions::session_cancel,
+            sessions::session_delete,
+            sessions::session_migrate_models,
+            // Model commands
+            models::get_models,
+            models::get_default_model_id,
+            models::normalize_model
         ])
         .on_window_event(|window, event| {
             #[cfg(target_os = "macos")]

@@ -1,8 +1,8 @@
 # CC Foundation - Codebase Summary
 
-**Generated**: 2025-12-06
-**Version**: 1.1
-**Status**: Phase 1 Backend Foundation Complete + Phase 2 Frontend Data Layer Complete
+**Last Updated**: 2025-12-06
+**Version**: 1.2
+**Status**: Phase 1 Backend Foundation + Chat Interface Complete, Phase 2 Frontend In Progress
 
 ---
 
@@ -333,6 +333,60 @@ Phase 2 Frontend Data Layer:
 -   `get_managed_settings_paths()` - Get enterprise settings paths
 -   `get_managed_mcp_paths()` - Get enterprise MCP paths
 
+### Chat Module (Phase 1 - NEW)
+
+**File Structure** (`src-tauri/src/chat/`):
+
+-   `mod.rs` - Module exports (11 lines)
+-   `session.rs` - Data structures (115 lines)
+-   `storage.rs` - File-based persistence (113 lines)
+-   `claude_cli.rs` - CLI spawning and streaming (237 lines)
+-   `commands.rs` - 9 Tauri commands (145 lines)
+-   `tests.rs` - 27 unit tests (506 lines)
+
+**Chat Commands** (9 total):
+
+1. `chat_check_claude_installed()` - Verify CLI availability
+2. `chat_create_session(project_path, title?)` - Create chat session
+3. `chat_get_sessions(project_path)` - List sessions for project
+4. `chat_get_messages(session_id)` - Load messages from session
+5. `chat_delete_session(session_id)` - Remove session
+6. `chat_send_message(session_id, message, config?)` - Send message & stream
+7. `chat_cancel_stream(session_id)` - Stop active stream
+8. `chat_save_assistant_message(session_id, content)` - Persist response
+9. `chat_update_session_title(session_id, title)` - Rename session
+
+**Frontend Chat Hooks** (`src/lib/chat-query.ts` - NEW):
+
+-   `useCheckClaudeInstalled()` - Check CLI availability
+-   `useGetChatSessions(projectPath)` - Load sessions
+-   `useGetChatMessages(sessionId)` - Load messages
+-   `useCreateChatSession()` - Create session mutation
+-   `useDeleteChatSession()` - Delete session mutation
+-   `useSendChatMessage()` - Send message mutation
+-   `useCancelChatStream()` - Cancel stream mutation
+-   `useSaveAssistantMessage()` - Save response mutation
+-   `useUpdateChatSessionTitle()` - Rename session mutation
+-   `useChatStream(sessionId, onChunk)` - Stream event listener
+
+**Storage** (file-based in `~/.ccconfig/chat-sessions/`):
+
+-   Sessions stored in `{session-id}/session.json` (metadata)
+-   Messages stored in `{session-id}/messages.json` (array)
+-   UUIDs for session IDs (UUID v4)
+-   Unix timestamps for created_at/updated_at
+-   JSON serialization with camelCase field names
+
+**Key Features**:
+
+-   Claude CLI integration (`claude -p --output-format stream-json`)
+-   JSONL stream parsing for real-time responses
+-   Tauri event emission for frontend updates
+-   Process tracking and cleanup
+-   Model whitelist validation (sonnet/opus/haiku)
+-   Path canonicalization and validation
+-   27 unit tests covering all operations
+
 ### Data Structures
 
 **Frontend Types** (inferred from commands):
@@ -391,7 +445,7 @@ Phase 2 Frontend Data Layer:
 
 ## 5. Key Features Implemented
 
-### Phase 1: Backend Foundation (Complete)
+### Phase 1a: Backend Foundation (Complete)
 
 **Per-Project Configuration**:
 
@@ -418,6 +472,36 @@ Phase 2 Frontend Data Layer:
 -   Detect managed settings from OS-specific paths
 -   Read-only access
 -   Display in UI
+
+### Phase 1b: Chat Interface (Complete)
+
+**Claude CLI Integration**:
+
+-   Spawns `claude -p --output-format stream-json` process
+-   Sends user messages via stdin
+-   Parses JSONL response stream line-by-line
+-   Emits Tauri events for real-time frontend updates
+
+**Session Management**:
+
+-   Storage location: `~/.ccconfig/chat-sessions/{session-id}/`
+-   Session metadata (title, timestamps, message count)
+-   Message persistence with role tracking
+-   Full chat history retention
+
+**Stream Processing**:
+
+-   Real-time JSONL parsing
+-   Support for text chunks, tool use, tool results
+-   Event-driven updates to frontend
+-   Process tracking with guaranteed cleanup
+
+**Security & Validation**:
+
+-   Model whitelist (sonnet/opus/haiku)
+-   Path canonicalization and validation
+-   UUID session ID format validation
+-   Absolute path requirement for projects
 
 ### Existing Features (Pre-Phase 1)
 

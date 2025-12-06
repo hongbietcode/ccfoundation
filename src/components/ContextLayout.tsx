@@ -5,6 +5,7 @@ import {
 	ChevronLeftIcon,
 	CpuIcon,
 	FileJsonIcon,
+	ListTodoIcon,
 	TerminalIcon,
 } from "lucide-react";
 import type React from "react";
@@ -61,6 +62,14 @@ export function ContextLayout() {
 			icon: BrainIcon,
 			label: t("navigation.memory"),
 		},
+		// Sessions only for project context
+		...(projectPath ? [
+			{
+				to: `${basePath}/sessions`,
+				icon: ListTodoIcon,
+				label: t("navigation.sessions", "Sessions"),
+			},
+		] : []),
 		// Usage only for global context
 		...(!projectPath ? [{
 			to: `${basePath}/usage`,

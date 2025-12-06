@@ -60,9 +60,15 @@ ccmate/
 **Backend Modules**:
 
 -   `main.rs` - Tauri app entry point, must not be edited
--   `lib.rs` - Plugin registration, handler invocation setup
+-   `lib.rs` - Plugin registration, handler invocation setup, chat module initialization
 -   `commands.rs` - Implementation of all Tauri commands (add new commands here)
 -   `hook_server.rs` - HTTP server for webhook handling
+-   `chat/mod.rs` - Chat module exports and organization
+-   `chat/session.rs` - ChatSession, ChatMessage, ChatConfig data structures
+-   `chat/storage.rs` - File-based persistence for chat sessions
+-   `chat/claude_cli.rs` - Claude CLI spawning, stream parsing, process management
+-   `chat/commands.rs` - Chat Tauri commands (9 commands)
+-   `chat/tests.rs` - Chat module unit tests (27 tests)
 
 ---
 
@@ -892,6 +898,314 @@ fix: Handle missing parent global config in merge
 
 docs: Update architecture documentation for Phase 1
 ```
+
+---
+
+## 10. Chat Module Code Standards (Phase 1)
+
+### 10.1 Rust Chat Module Structure
+
+**Chat module follows standard Rust project layout**:
+
+```rust
+// src-tauri/src/chat/mod.rs
+pub mod commands;      // Tauri command handlers
+pub mod claude_cli;    // CLI spawning and stream processing
+pub mod session;       // Data structures
+pub mod storage;       // File I/O operations
+pub use commands::*;   // Export public items
+```
+
+**Data Structure Patterns** (session.rs):
+
+```rust
+// Session metadata with timestamps
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSession {
+    pub id: String,                    // UUID for unique identification
+    pub project_path: String,          // Absolute path to project
+    pub title: String,                 // User-friendly display name
+    pub created_at: u64,               // Unix timestamp
+    pub updated_at: u64,               // Unix timestamp
+    pub message_count: usize,          // Cache of message count
+}
+
+// Message with optional metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatMessage {
+    pub id: String,                    // UUID for unique identification
+    pub session_id: String,            // Foreign key to session
+    pub role: MessageRole,             // User|Assistant|System|Tool
+    pub content: String,               // Message text content
+    pub timestamp: u64,                // Unix timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_use: Option<ToolUse>,     // Optional tool invocation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,       // Optional JSON metadata
+}
+```
+
+**Validation & Error Handling** (claude_cli.rs):
+
+```rust
+// Model validation whitelist
+const VALID_MODELS: &[&str] = &["sonnet", "opus", "haiku"];
+
+// Path canonicalization before use
+fn validate_project_path(path: &str) -> Result<PathBuf, String> {
+    let path_buf = PathBuf::from(path);
+    if !path_buf.is_absolute() {
+        return Err("Project path must be absolute".to_string());
+    }
+
+    let canonical = path_buf
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+
+    Ok(canonical)
+}
+
+// Process spawning with resource cleanup
+pub async fn spawn_claude_stream(
+    app: AppHandle,
+    session_id: String,
+    message: String,
+    project_path: String,
+    model: String,
+    processes: StreamProcesses,
+) -> Result<(), String> {
+    // Validate inputs
+    if !VALID_MODELS.contains(&model.as_str()) {
+        return Err(format!("Invalid model: {}", model));
+    }
+
+    // Spawn process and track it
+    let mut child = Command::new("claude")
+        .arg("-p")
+        .arg("--output-format")
+        .arg("stream-json")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+
+    let stdout = child.stdout.take()
+        .ok_or("Failed to capture stdout")?;
+
+    // Store process for cleanup
+    let mut procs = processes.lock().await;
+    procs.insert(session_id.clone(), child);
+    drop(procs);  // Release lock
+
+    // Stream processing continues...
+    Ok(())
+}
+```
+
+**Storage Patterns** (storage.rs):
+
+```rust
+// All file operations are explicit and path-validated
+pub fn save_session(
+    session: &ChatSession,
+    messages: &[ChatMessage],
+) -> Result<(), String> {
+    let session_dir = get_session_dir(&session.id)?;
+
+    // Create directory if missing
+    fs::create_dir_all(&session_dir)
+        .map_err(|e| format!("Failed to create session dir: {}", e))?;
+
+    // Write session.json
+    let session_file = session_dir.join("session.json");
+    let session_json = serde_json::to_string_pretty(session)
+        .map_err(|e| format!("Failed to serialize session: {}", e))?;
+    fs::write(session_file, session_json)
+        .map_err(|e| format!("Failed to write session: {}", e))?;
+
+    // Write messages.json
+    let messages_file = session_dir.join("messages.json");
+    let messages_json = serde_json::to_string_pretty(messages)
+        .map_err(|e| format!("Failed to serialize messages: {}", e))?;
+    fs::write(messages_file, messages_json)
+        .map_err(|e| format!("Failed to write messages: {}", e))?;
+
+    Ok(())
+}
+```
+
+### 10.2 Frontend Chat Hooks (React Query)
+
+**Chat-specific hooks in src/lib/chat-query.ts**:
+
+```typescript
+/**
+ * Query hook to check Claude CLI installation.
+ * Should be called on app startup.
+ *
+ * @returns Query with boolean installation status
+ */
+export function useCheckClaudeInstalled() {
+    return useQuery({
+        queryKey: ["claude-installed"],
+        queryFn: () => invoke<boolean>("chat_check_claude_installed"),
+        staleTime: 60000, // Cache for 1 minute
+    });
+}
+
+/**
+ * Query hook to load all sessions for a project.
+ *
+ * @param projectPath - Absolute path to project
+ * @returns Query with array of ChatSession objects
+ */
+export function useGetChatSessions(projectPath: string) {
+    return useQuery({
+        queryKey: ["chat-sessions", projectPath],
+        queryFn: () => invoke<ChatSession[]>("chat_get_sessions", { projectPath }),
+        enabled: !!projectPath,
+    });
+}
+
+/**
+ * Mutation hook to send a chat message and stream response.
+ * Automatically invalidates related queries on completion.
+ *
+ * @returns Mutation function accepting sessionId, message, and optional config
+ */
+export function useSendChatMessage() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({
+            sessionId,
+            message,
+            config,
+        }: {
+            sessionId: string;
+            message: string;
+            config?: ChatConfig;
+        }) => invoke<void>("chat_send_message", { sessionId, message, config }),
+        onSuccess: (_, variables) => {
+            // Refetch messages after sending
+            queryClient.invalidateQueries({
+                queryKey: ["chat-messages", variables.sessionId],
+            });
+        },
+        onError: (error: Error) => {
+            toast.error(`Failed to send message: ${error.message}`);
+        },
+    });
+}
+
+/**
+ * Event listener hook for streaming chat responses.
+ * Automatically unsubscribes on unmount.
+ *
+ * @param sessionId - Session to listen for
+ * @param onChunk - Callback for each streamed chunk
+ * @returns Cleanup function
+ */
+export function useChatStream(
+    sessionId: string,
+    onChunk: (content: string) => void
+) {
+    useEffect(() => {
+        const eventName = `chat-stream:${sessionId}`;
+
+        const unlisten = listen<string>(eventName, (event) => {
+            onChunk(event.payload);
+        });
+
+        return () => {
+            unlisten.then(f => f());
+        };
+    }, [sessionId, onChunk]);
+}
+```
+
+### 10.3 Chat Testing Standards
+
+**Test organization** (tests.rs):
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    // Session tests
+    #[test]
+    fn test_create_session() {
+        let session = ChatSession::new(
+            "/tmp/project".to_string(),
+            "Test Chat".to_string(),
+        );
+        assert!(!session.id.is_empty());
+        assert_eq!(session.message_count, 0);
+    }
+
+    // Storage tests with temporary directories
+    #[tokio::test]
+    async fn test_save_and_load_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let session = ChatSession::new(
+            temp_dir.path().to_string_lossy().to_string(),
+            "Test".to_string(),
+        );
+
+        save_session(&session, &[]).unwrap();
+        let (loaded, messages) = load_session(&session.id).unwrap();
+
+        assert_eq!(loaded.id, session.id);
+        assert!(messages.is_empty());
+    }
+
+    // CLI validation tests
+    #[test]
+    fn test_model_validation() {
+        assert!(validate_model("sonnet").is_ok());
+        assert!(validate_model("opus").is_ok());
+        assert!(validate_model("invalid").is_err());
+    }
+
+    // Error handling tests
+    #[test]
+    fn test_missing_session() {
+        let result = load_session("nonexistent-id");
+        assert!(result.is_err());
+    }
+}
+```
+
+**Testing coverage requirements**:
+
+-   Session CRUD operations
+-   Message persistence
+-   Stream parsing from JSONL format
+-   Model and path validation
+-   Process cleanup and cancellation
+-   Error cases and recovery
+-   Edge cases (empty sessions, large messages)
+
+### 10.4 Chat Module Integration Checklist
+
+When modifying or extending the chat module:
+
+-   [ ] All I/O operations are async (tokio)
+-   [ ] Process handles are tracked and cleaned up
+-   [ ] UUIDs used for session and message IDs
+-   [ ] Paths are canonicalized before use
+-   [ ] Models validated against whitelist
+-   [ ] Errors have descriptive messages
+-   [ ] Timestamps use Unix epoch format
+-   [ ] JSON serialization respects camelCase
+-   [ ] React Query hooks invalidate properly
+-   [ ] Event listeners are cleaned up
+-   [ ] Tests cover happy path and errors
+-   [ ] No blocking I/O in async functions
 
 ---
 

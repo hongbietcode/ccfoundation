@@ -2179,7 +2179,10 @@ fn read_project_registry() -> Result<Vec<ProjectRegistryEntry>, String> {
     Ok(registry)
 }
 
-fn write_project_registry_entry(project_path: &str, entry: &ProjectRegistryEntry) -> Result<(), String> {
+fn write_project_registry_entry(
+    project_path: &str,
+    entry: &ProjectRegistryEntry,
+) -> Result<(), String> {
     let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
     let app_config_path = home_dir.join(APP_CONFIG_DIR);
     let registry_path = app_config_path.join("project-registry.json");
@@ -2279,7 +2282,7 @@ pub async fn init_project_claude_dir(project_path: String) -> Result<(), String>
     let settings_path = get_project_settings_path(&project_path);
     if !settings_path.exists() {
         let default_settings = serde_json::json!({
-            "model": "claude-sonnet-4",
+            "model": "claude-sonnet-4-5-20250929",
             "env": {},
             "permissions": {
                 "allow": [],
@@ -2676,7 +2679,10 @@ pub async fn delete_project_config(project_path: String) -> Result<(), String> {
 
     // 3. Get session IDs before deleting project sessions directory
     let sanitized_path = sanitize_project_path_for_dir(&project_path);
-    let project_sessions_dir = home_dir.join(".claude").join("projects").join(&sanitized_path);
+    let project_sessions_dir = home_dir
+        .join(".claude")
+        .join("projects")
+        .join(&sanitized_path);
     let session_ids = get_project_session_ids(&project_sessions_dir);
 
     // 4. Delete project sessions directory
@@ -2757,7 +2763,10 @@ mod tests {
     fn test_remove_project_from_claude_json_file_not_exists() {
         // Should return Ok if .claude.json doesn't exist
         let result = remove_project_from_claude_json("/nonexistent/project");
-        assert!(result.is_ok(), "Should handle missing .claude.json gracefully");
+        assert!(
+            result.is_ok(),
+            "Should handle missing .claude.json gracefully"
+        );
     }
 
     #[test]
@@ -2782,7 +2791,11 @@ mod tests {
         let non_existent = test_dir.join("nonexistent");
 
         let result = get_project_session_ids(&non_existent);
-        assert_eq!(result.len(), 0, "Should return empty vec for non-existent directory");
+        assert_eq!(
+            result.len(),
+            0,
+            "Should return empty vec for non-existent directory"
+        );
 
         let _ = fs::remove_dir_all(&test_dir);
     }
@@ -2800,7 +2813,11 @@ mod tests {
         let result = get_project_session_ids(&test_dir);
 
         // Should have 2 sessions (agent files excluded)
-        assert_eq!(result.len(), 2, "Should extract exactly 2 session IDs (agent excluded)");
+        assert_eq!(
+            result.len(),
+            2,
+            "Should extract exactly 2 session IDs (agent excluded)"
+        );
         assert!(result.contains(&"session-abc123".to_string()));
         assert!(result.contains(&"session-xyz789".to_string()));
         assert!(!result.iter().any(|s| s.contains("agent")));
@@ -2830,7 +2847,10 @@ mod tests {
 
         // Should return Ok if history.jsonl doesn't exist
         let result = filter_history_file(&home_dir, "/Users/test/project");
-        assert!(result.is_ok(), "Should handle missing history.jsonl gracefully");
+        assert!(
+            result.is_ok(),
+            "Should handle missing history.jsonl gracefully"
+        );
 
         let _ = fs::remove_dir_all(&test_dir);
     }
@@ -2895,7 +2915,10 @@ invalid json line here
         assert!(result.is_ok(), "Should handle malformed JSON gracefully");
 
         let content = fs::read_to_string(&history_path).expect("Failed to read filtered history");
-        assert!(content.contains("invalid json line here"), "Should preserve malformed lines");
+        assert!(
+            content.contains("invalid json line here"),
+            "Should preserve malformed lines"
+        );
         assert!(content.contains(r#""project": "/Users/test/project2""#));
 
         let _ = fs::remove_dir_all(&test_dir);
@@ -2942,7 +2965,10 @@ invalid json line here
         let session_ids = vec!["session-456".to_string()];
         cleanup_session_data(&test_dir, &session_ids);
 
-        assert!(!history_dir.exists(), "File-history directory should be removed");
+        assert!(
+            !history_dir.exists(),
+            "File-history directory should be removed"
+        );
 
         let _ = fs::remove_dir_all(&test_dir);
     }
@@ -2961,7 +2987,10 @@ invalid json line here
         let session_ids = vec!["session-789".to_string()];
         cleanup_session_data(&test_dir, &session_ids);
 
-        assert!(!debug_dir.join("session-789.txt").exists(), "Debug file should be removed");
+        assert!(
+            !debug_dir.join("session-789.txt").exists(),
+            "Debug file should be removed"
+        );
 
         let _ = fs::remove_dir_all(&test_dir);
     }
@@ -3029,8 +3058,14 @@ invalid json line here
         let session_ids = vec!["session-1".to_string(), "session-2".to_string()];
         cleanup_session_data(&test_dir, &session_ids);
 
-        assert!(!todos_dir1.exists(), "First todos directory should be removed");
-        assert!(!todos_dir2.exists(), "Second todos directory should be removed");
+        assert!(
+            !todos_dir1.exists(),
+            "First todos directory should be removed"
+        );
+        assert!(
+            !todos_dir2.exists(),
+            "Second todos directory should be removed"
+        );
 
         let _ = fs::remove_dir_all(&test_dir);
     }
